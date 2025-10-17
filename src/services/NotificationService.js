@@ -18,7 +18,7 @@ class NotificationService {
         
         for (const userId of birthdayUsers) {
             const embed = new EmbedBuilder()
-                .setColor('#FF69B4')
+                .setColor('#66ece6ff')
                 .setTitle('🎉 Happy Birthday! 🎂')
                 .setDescription(`Happy Birthday <@${userId}>! 🎈\nHave a wonderful day! 🎁`);
 
