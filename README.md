@@ -17,7 +17,7 @@ A Discord bot that helps manage and celebrate server members' birthdays.
    ```bash
    npm install
    ```
-3. Copy `.env.example` to `.env` and fill in your configuration:
+3. Open `.env` and fill in your configuration:
    - `DISCORD_TOKEN`: Your Discord bot token
    - `CLIENT_ID`: Your Discord application client ID
    - `GUILD_ID`: Your Discord server ID
