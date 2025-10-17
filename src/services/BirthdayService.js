@@ -39,6 +39,16 @@ class BirthdayService {
         return await this.loadBirthdays();
     }
 
+    async getBirthdaysByDate(month, day) {
+        const birthdays = await this.loadBirthdays();
+        return Object.entries(birthdays)
+            .filter(([_, data]) => 
+                data.month === month && 
+                data.day === day
+            )
+            .map(([userId]) => userId);
+    }
+
     async getTodaysBirthdays() {
         const today = new Date();
         const birthdays = await this.loadBirthdays();
