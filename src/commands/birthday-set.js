@@ -4,8 +4,8 @@ const { isValidDate } = require('../utils/dateUtils');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('birthday')
-        .setDescription('Set your birthday')
+        .setName('birthday-set')
+        .setDescription('Set your birthday using a date picker')
         .addIntegerOption(option =>
             option.setName('month')
                 .setDescription('Birth month (1-12)')
