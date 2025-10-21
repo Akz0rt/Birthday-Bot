@@ -21,19 +21,20 @@ for (const file of commandFiles) {
     client.commands.set(command.data.name, command);
 }
 
-client.once(Events.ClientReady, () => {
+client.once(Events.ClientReady, async () => {
     console.log('Discord bot is ready! 🎉');
     
     // Set up birthday channel for notifications
     const channel = client.channels.cache.get(config.birthdayChannel);
     if (channel) {
         NotificationService.setChannel(channel);
+        console.log('Birthday channel configured successfully');
+        
+        // Start the birthday scheduler (includes initial check)
+        SchedulerService.start();
     } else {
-        console.error('Birthday channel not found!');
+        console.error('Birthday channel not found! Please check BIRTHDAY_CHANNEL_ID in .env');
     }
-
-    // Start the birthday scheduler
-    SchedulerService.start();
 });
 
 client.on(Events.InteractionCreate, async interaction => {
