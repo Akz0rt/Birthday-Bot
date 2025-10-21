@@ -4,7 +4,7 @@ const { formatDate, getDaysUntilBirthday } = require('../utils/dateUtils');
 
 module.exports = {
     data: new SlashCommandBuilder()
-        .setName('birthdays')
+        .setName('birthdays-coming')
         .setDescription('List birthdays coming up in the next 7 days'),
 
     async execute(interaction) {
