@@ -14,12 +14,17 @@ function getDaysUntilBirthday(birthMonth, birthDay) {
     const today = new Date();
     const birthday = new Date(today.getFullYear(), birthMonth - 1, birthDay);
     
+    // Reset time parts to compare dates only
+    today.setHours(0, 0, 0, 0);
+    birthday.setHours(0, 0, 0, 0);
+    
+    // If birthday has already passed this year, look at next year's birthday
     if (birthday < today) {
         birthday.setFullYear(today.getFullYear() + 1);
     }
     
     const diffTime = birthday.getTime() - today.getTime();
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return Math.floor(diffTime / (1000 * 60 * 60 * 24));
 }
 
 module.exports = {
