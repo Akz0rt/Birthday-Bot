@@ -73,7 +73,7 @@ module.exports = {
 
             await BirthdayService.setBirthday(interaction.user.id, inputMonth, inputDay);
             await modalSubmit.reply({
-                content: `Your birthday has been set to ${inputMonth}/${inputDay}!`,
+                content: `Birthday has been set! We'll celebrate your special day on ${inputDay}/${inputMonth}!`,
                 flags: ['Ephemeral']
             });
 
