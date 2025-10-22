@@ -1,46 +1,95 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('@discordjs/builders');
+const { 
+    ComponentType, 
+    ActionRowBuilder, 
+    ButtonBuilder, 
+    ButtonStyle,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
+} = require('discord.js');
 const BirthdayService = require('../services/BirthdayService');
 const { isValidDate } = require('../utils/dateUtils');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('birthday-set')
-        .setDescription('Set your birthday using a date picker')
-        .addIntegerOption(option =>
-            option.setName('month')
-                .setDescription('Birth month (1-12)')
-                .setRequired(true)
-                .setMinValue(1)
-                .setMaxValue(12))
-        .addIntegerOption(option =>
-            option.setName('day')
-                .setDescription('Birth day (1-31)')
-                .setRequired(true)
-                .setMinValue(1)
-                .setMaxValue(31)),
+        .setDescription('Set your birthday'),
 
     async execute(interaction) {
-        const month = interaction.options.getInteger('month');
-        const day = interaction.options.getInteger('day');
+        const row = new ActionRowBuilder()
+            .addComponents(
+                new ButtonBuilder()
+                    .setCustomId('birthday_datepicker')
+                    .setLabel('Select your birthday')
+                    .setStyle(ButtonStyle.Primary)
+            );
+
+        const response = await interaction.reply({
+            content: 'Click the button below to select your birthday:',
+            components: [row],
+            flags: ['Ephemeral']
+        });
 
         try {
-            if (!isValidDate(month, day)) {
-                return await interaction.reply({ 
-                    content: 'Please provide a valid date!', 
-                    ephemeral: true 
+            const buttonInteraction = await response.awaitMessageComponent({
+                componentType: ComponentType.Button,
+                time: 60000,
+                filter: i => i.user.id === interaction.user.id
+            });
+
+            // Create date picker modal
+            const modal = new ModalBuilder()
+                .setCustomId('birthday_modal')
+                .setTitle('Select Your Birthday');
+
+            const dateInput = new TextInputBuilder()
+                .setCustomId('birthday_date')
+                .setLabel('Your Birthday (DD/MM)')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('Enter date (e.g., 25/12)')
+                .setRequired(true);
+
+            const actionRow = new ActionRowBuilder().addComponents(dateInput);
+            modal.addComponents(actionRow);
+
+            await buttonInteraction.showModal(modal);
+
+            const modalSubmit = await buttonInteraction.awaitModalSubmit({
+                time: 60000,
+                filter: i => i.user.id === interaction.user.id
+            });
+
+            const dateString = modalSubmit.fields.getTextInputValue('birthday_date');
+            const [inputDay, inputMonth] = dateString.split('/').map(num => parseInt(num));
+
+            if (!isValidDate(inputMonth, inputDay)) {
+                await modalSubmit.reply({
+                    content: 'Invalid date! Please enter a valid date in DD/MM format.',
+                    flags: ['Ephemeral']
                 });
+                return;
             }
 
-            await BirthdayService.setBirthday(interaction.user.id, month, day);
-            await interaction.reply({ 
-                content: `Your birthday has been set to ${month}/${day}!`,
-                ephemeral: true 
+            await BirthdayService.setBirthday(interaction.user.id, inputMonth, inputDay);
+            await modalSubmit.reply({
+                content: `Your birthday has been set to ${inputMonth}/${inputDay}!`,
+                flags: ['Ephemeral']
             });
+
         } catch (error) {
-            await interaction.reply({ 
-                content: 'There was an error setting your birthday!',
-                ephemeral: true 
-            });
+            if (error.code === 'INTERACTION_COLLECTOR_ERROR') {
+                await interaction.followUp({
+                    content: 'Birthday selection timed out. Please try again.',
+                    flags: ['Ephemeral']
+                });
+            } else {
+                console.error('Error in birthday-set command:', error);
+                await interaction.followUp({
+                    content: 'There was an error setting your birthday!',
+                    flags: ['Ephemeral']
+                });
+            }
         }
     },
 };
