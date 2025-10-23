@@ -10,6 +10,7 @@ const {
 } = require('discord.js');
 const BirthdayService = require('../services/BirthdayService');
 const { isValidDate } = require('../utils/dateUtils');
+const config = require('../config');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -72,10 +73,18 @@ module.exports = {
             }
 
             await BirthdayService.setBirthday(interaction.user.id, inputMonth, inputDay);
+            
+            // Send confirmation to the user
             await modalSubmit.reply({
-                content: `Birthday has been set! We'll celebrate your special day on ${inputDay}/${inputMonth}!`,
+                content: `Your birthday has been successfully set to ${inputDay}/${inputMonth}! 🎂`,
                 flags: ['Ephemeral']
             });
+
+            // Send announcement to birthday channel
+            const birthdayChannel = interaction.guild.channels.cache.get(config.birthdayChannel);
+            if (birthdayChannel) {
+                await birthdayChannel.send(`${interaction.user} has set their birthday! We'll celebrate on ${inputDay}/${inputMonth}! 🎉`);
+            }
 
         } catch (error) {
             if (error.code === 'INTERACTION_COLLECTOR_ERROR') {
