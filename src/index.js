@@ -25,15 +25,17 @@ client.once(Events.ClientReady, async () => {
     console.log('Discord bot is ready! 🎉');
     
     // Set up birthday channel for notifications
-    const channel = client.channels.cache.get(config.birthdayChannel);
-    if (channel) {
-        NotificationService.setChannel(channel);
-        console.log('Birthday channel configured successfully');
-        
+    const announceChannel = client.channels.cache.get(config.birthdayChannel);
+    const congratsChannel = client.channels.cache.get(config.congratsChannel);
+
+    if (announceChannel || congratsChannel) {
+        NotificationService.setChannels(announceChannel, congratsChannel);
+        console.log('Notification channels configured successfully');
+
         // Start the birthday scheduler (includes initial check)
         SchedulerService.start();
     } else {
-        console.error('Birthday channel not found! Please check BIRTHDAY_CHANNEL_ID in .env');
+        console.error('No notification channels found! Please check BIRTHDAY_CHANNEL_ID and CONGRATS_CHANNEL_ID in .env');
     }
 });
 

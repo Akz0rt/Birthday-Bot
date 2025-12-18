@@ -8,5 +8,7 @@ module.exports = {
     birthdayChannel: process.env.BIRTHDAY_CHANNEL_ID,
     checkTime: process.env.CHECK_TIME || '00:00',
     maleRoleId: process.env.MALE_ROLE_ID,
-    femaleRoleId: process.env.FEMALE_ROLE_ID
+    femaleRoleId: process.env.FEMALE_ROLE_ID,
+    // Channel where congratulations (birthday announcements) are posted
+    congratsChannel: process.env.CONGRATS_CHANNEL_ID
 };
