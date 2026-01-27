@@ -1,5 +1,5 @@
 ﻿const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const BirthdayService = require('../services/BirthdayService');
+const CosmosDBService = require('../services/CosmosDBService');
 const { formatDate, getDaysUntilBirthday } = require('../utils/dateUtils');
 const config = require('../config');
 
@@ -16,7 +16,7 @@ module.exports = {
     async execute(interaction) {
         try {
             const targetUser = interaction.options.getUser('user');
-            const birthday = await BirthdayService.getBirthday(targetUser.id);
+            const birthday = await CosmosDBService.getBirthday(targetUser.id);
 
             if (!birthday) {
                 return await interaction.reply({

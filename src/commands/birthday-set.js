@@ -8,7 +8,7 @@ const {
     TextInputBuilder,
     TextInputStyle
 } = require('discord.js');
-const BirthdayService = require('../services/BirthdayService');
+const CosmosDBService = require('../services/CosmosDBService');
 const { isValidDate } = require('../utils/dateUtils');
 const config = require('../config');
 
@@ -72,7 +72,7 @@ module.exports = {
                 return;
             }
 
-            await BirthdayService.setBirthday(interaction.user.id, inputMonth, inputDay);
+            await CosmosDBService.setBirthday(interaction.user.id, inputMonth, inputDay);
             
             // Send confirmation to the user
             await modalSubmit.reply({

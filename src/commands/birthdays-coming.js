@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
-const BirthdayService = require('../services/BirthdayService');
+const CosmosDBService = require('../services/CosmosDBService');
 const { formatDate, getDaysUntilBirthday } = require('../utils/dateUtils');
 
 module.exports = {
@@ -9,7 +9,7 @@ module.exports = {
 
     async execute(interaction) {
         try {
-            const birthdays = await BirthdayService.getAllBirthdays();
+            const birthdays = await CosmosDBService.getAllBirthdays();
             const birthdayList = Object.entries(birthdays);
             
             // Filter birthdays within next 7 days

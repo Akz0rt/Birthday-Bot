@@ -10,5 +10,10 @@ module.exports = {
     maleRoleId: process.env.MALE_ROLE_ID,
     femaleRoleId: process.env.FEMALE_ROLE_ID,
     // Channel where congratulations (birthday announcements) are posted
-    congratsChannel: process.env.CONGRATS_CHANNEL_ID
+    congratsChannel: process.env.CONGRATS_CHANNEL_ID,
+    
+    // Azure CosmosDB Configuration
+    cosmosEndpoint: process.env.COSMOS_ENDPOINT,
+    cosmosKey: process.env.COSMOS_KEY,
+    cosmosDbName: process.env.COSMOS_DB_NAME || 'BirthdayBotDB'
 };

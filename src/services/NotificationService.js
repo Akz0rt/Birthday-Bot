@@ -1,6 +1,6 @@
 const { EmbedBuilder } = require('discord.js');
 const config = require('../config');
-const BirthdayService = require('./BirthdayService');
+const CosmosDBService = require('./CosmosDBService');
 
 class NotificationService {
     constructor() {
@@ -28,7 +28,7 @@ class NotificationService {
         const targetChannel = this.congratsChannel || this.announceChannel;
         if (!targetChannel) return;
 
-        const birthdayUsers = await BirthdayService.getTodaysBirthdays();
+        const birthdayUsers = await CosmosDBService.getTodaysBirthdays();
 
         if (birthdayUsers.length > 0) {
             for (const userId of birthdayUsers) {
