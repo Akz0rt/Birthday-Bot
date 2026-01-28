@@ -43,6 +43,17 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: 'Disable Kudu build to avoid rsync path issues'
+        if: ${{ env.AZURE_CREDENTIALS != '' }}
+        run: |
+          az webapp config appsettings set --resource-group Birthday-Bot_group --name Birthday-Bot --settings SCM_DO_BUILD_DURING_DEPLOYMENT=false
+
+      - name: 'Debug: list repo files (first 200 lines)'
+        if: ${{ env.AZURE_CREDENTIALS != '' }}
+        run: |
+          ls -la
+          find src -type f | sed -n '1,200p'
+
       - name: 'Zip and deploy via Azure CLI'
         if: ${{ env.AZURE_CREDENTIALS != '' }}
         run: |
