@@ -65,3 +65,29 @@ client.on(Events.InteractionCreate, async interaction => {
 
 // Log in to Discord
 client.login(config.token);
+
+// Minimal HTTP server for health checks (helps Azure detect running app)
+const http = require('http');
+const PORT = process.env.PORT || 3000;
+
+const server = http.createServer((req, res) => {
+    if (req.url === '/health' || req.url === '/status') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', uptime: process.uptime() }));
+        return;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Birthday Bot is running');
+});
+
+server.listen(PORT, () => {
+    console.log(`Health server listening on port ${PORT}`);
+});
+
+// Graceful shutdown
+process.on('SIGTERM', async () => {
+    console.log('SIGTERM received: shutting down');
+    try { await client.destroy(); } catch (e) {}
+    server.close(() => process.exit(0));
+});
