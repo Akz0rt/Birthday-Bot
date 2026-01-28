@@ -63,9 +63,6 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 });
 
-// Log in to Discord
-client.login(config.token);
-
 // Minimal HTTP server for health checks (helps Azure detect running app)
 const http = require('http');
 const PORT = process.env.PORT || 3000;
@@ -85,9 +82,39 @@ server.listen(PORT, () => {
     console.log(`Health server listening on port ${PORT}`);
 });
 
+// Global process error handlers to keep the container alive long enough for diagnostics
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', err => {
+    console.error('Uncaught Exception thrown:', err);
+});
+
+// Discord client error handlers
+client.on('error', error => {
+    console.error('Discord client error:', error);
+});
+
+client.on('warn', info => {
+    console.warn('Discord client warning:', info);
+});
+
+client.once('shardError', error => {
+    console.error('A websocket connection encountered an error:', error);
+});
+
+// Log in to Discord (catch failures so the process doesn't crash silently)
+client.login(config.token).catch(err => {
+    console.error('Failed to login to Discord:', err);
+});
+
 // Graceful shutdown
 process.on('SIGTERM', async () => {
     console.log('SIGTERM received: shutting down');
-    try { await client.destroy(); } catch (e) {}
+    try { await client.destroy(); } catch (e) { console.error(e); }
     server.close(() => process.exit(0));
+
+    // Force exit if shutdown hangs
+    setTimeout(() => process.exit(1), 5000).unref();
 });
