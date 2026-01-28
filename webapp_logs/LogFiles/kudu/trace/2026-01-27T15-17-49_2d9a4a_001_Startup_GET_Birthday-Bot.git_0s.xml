@@ -1,0 +1,3 @@
+<step title="Startup Request" date="2026-01-27T15:17:49.995" instance="2d9a4a" url="/Birthday-Bot.git/" method="GET" type="request" pid="851,1,19" ScmType="LocalGit" >
+  <step title="Cleanup Xml Logs" date="2026-01-27T15:17:50.004" /><!-- duration: 10ms -->
+</step><!-- duration: 27ms -->
