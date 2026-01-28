@@ -1,6 +1,10 @@
 # Environment variables
 .env
 
+# Azure publish profiles and credentials
+publishProfile.xml
+*.PublishSettings
+
 # Dependencies
 node_modules/
 package-lock.json
