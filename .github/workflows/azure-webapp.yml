@@ -51,7 +51,7 @@ jobs:
       - name: 'Zip and deploy via Azure CLI'
         if: ${{ env.AZURE_CREDENTIALS != '' }}
         run: |
-          zip -r app_deploy.zip . -x ".git/*" "*.zip" "*.log" "*.md" "node_modules/*" "webapp_logs/*" "webapp_latest_logs/*" ".github/*" "publishProfile.xml" "*.js~" "*.json~"
+          zip -r app_deploy.zip . -x ".git/*" "*.zip" "*.log" "*.md" "webapp_logs/*" "webapp_latest_logs/*" ".github/*" "publishProfile.xml" "*.js~" "*.json~"
           az webapp deployment source config-zip --resource-group Birthday-Bot_group --name Birthday-Bot --src app_deploy.zip
       
       - name: 'Fetch docker logs if deployment fails'
