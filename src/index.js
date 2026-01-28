@@ -1,3 +1,8 @@
+// Polyfill for crypto in Azure App Service when using WEBSITE_RUN_FROM_PACKAGE
+if (typeof globalThis.crypto === 'undefined') {
+    globalThis.crypto = require('node:crypto').webcrypto;
+}
+
 const { Client, Collection, Events, GatewayIntentBits } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
