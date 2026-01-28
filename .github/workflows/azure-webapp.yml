@@ -9,6 +9,8 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    env:
+      AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
 
     steps:
       - name: 'Checkout GitHub Action'
@@ -36,19 +38,19 @@ jobs:
           fi
 
       - name: 'Azure login (service principal)'
-        if: ${{ secrets.AZURE_CREDENTIALS != '' }}
+        if: ${{ env.AZURE_CREDENTIALS != '' }}
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: 'Zip and deploy via Azure CLI'
-        if: ${{ secrets.AZURE_CREDENTIALS != '' }}
+        if: ${{ env.AZURE_CREDENTIALS != '' }}
         run: |
           zip -r app_deploy.zip .
           az webapp deployment source config-zip --resource-group Birthday-Bot_group --name Birthday-Bot --src app_deploy.zip
 
       - name: 'Deploy to Azure Web App (publish profile)'
-        if: ${{ secrets.AZURE_CREDENTIALS == '' }}
+        if: ${{ env.AZURE_CREDENTIALS == '' }}
         uses: azure/webapps-deploy@v2
         with:
           app-name: 'Birthday-Bot'
