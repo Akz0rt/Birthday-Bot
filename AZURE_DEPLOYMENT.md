@@ -1,21 +1,22 @@
 # Azure Web App Deployment Guide - Birthday Bot
 
-This guide provides step-by-step instructions to deploy your Discord Birthday Bot on Azure as a Web App, using Azure Cosmos DB for birthday storage.
+This guide provides step-by-step instructions to deploy the Discord Birthday Bot on Azure App Service, using Azure Cosmos DB for storage.
 
 ## Prerequisites
 
-- Azure Account (Free tier available)
-- Azure CLI installed locally
+- Azure account
+- Azure CLI installed
 - Git installed
 - Node.js 18+ installed
-- Your Discord bot token and credentials
+- Discord bot token and credentials
+- OpenAI API key
 
 ## Architecture Overview
 
-- **Hosting**: Azure Web App (App Service)
-- **Database**: Azure Cosmos DB (NoSQL)
-- **Container**: Docker (optional but recommended)
-- **Scaling**: Automatic with App Service Plan
+- **Hosting**: Azure App Service (B1 tier)
+- **Database**: Azure Cosmos DB (serverless, NoSQL)
+- **AI**: OpenAI API (gpt-4o-mini)
+- **CI/CD**: GitHub Actions (auto-deploy on push to main)
 
 ## Part 1: Set Up Azure Cosmos DB
 
@@ -23,49 +24,44 @@ This guide provides step-by-step instructions to deploy your Discord Birthday Bo
 
 1. Go to [Azure Portal](https://portal.azure.com)
 2. Click "Create a resource"
-3. Search for "Azure Cosmos DB"
-4. Select "Azure Cosmos DB"
-5. Click "Create"
+3. Search for "Azure Cosmos DB" and select it
+4. Click "Create" and choose "Azure Cosmos DB for NoSQL"
 
 ### Step 2: Configure Cosmos DB
 
-1. Fill in the form:
-   - **Subscription**: Select your subscription
-   - **Resource Group**: Create new (e.g., `birthday-bot-rg`)
-   - **Account Name**: e.g., `birthday-bot-cosmos` (must be globally unique)
-   - **Location**: Choose nearest region
-   - **Capacity mode**: Select "Provisioned throughput"
-   - **Apply Free Tier Discount**: Check if eligible
+Fill in the creation form:
 
-2. Click "Review + Create" → "Create"
+- **Subscription**: Select your subscription
+- **Resource Group**: Create new (e.g., `birthday-bot-rg`)
+- **Account Name**: e.g., `birthday-bot-cosmos` (must be globally unique)
+- **Location**: Choose your nearest region
+- **Capacity mode**: Select "Serverless"
 
-3. Wait for deployment (usually 5-10 minutes)
+Click "Review + Create" then "Create". Deployment takes 5-10 minutes.
 
 ### Step 3: Get Cosmos DB Connection Details
 
 1. Go to your Cosmos DB account
 2. Click "Keys" in the left sidebar
 3. Copy:
-   - **URI**: This is your `COSMOS_ENDPOINT`
-   - **PRIMARY KEY**: This is your `COSMOS_KEY`
+   - **URI** into `COSMOS_ENDPOINT` (keep the `:443/` at the end)
+   - **PRIMARY KEY** into `COSMOS_KEY`
 
 ### Step 4: Create Database and Container
 
 1. Go to "Data Explorer"
 2. Click "New Container"
 3. Fill in:
-   - **Database ID**: `BirthdayBotDB` (or your preferred name)
+   - **Database ID**: `BirthdayBotDB`
    - **Container ID**: `birthdays`
    - **Partition key**: `/userId`
-   - **Throughput**: 400 RU/s (free tier eligible)
-
 4. Click "OK"
 
 ## Part 2: Prepare Your Application
 
 ### Step 1: Update Environment Variables
 
-Open `.env` file and add:
+Create or update your `.env` file:
 
 ```env
 # Discord Bot Configuration
@@ -74,32 +70,53 @@ CLIENT_ID=your_client_id_here
 GUILD_ID=your_guild_id_here
 BIRTHDAY_CHANNEL_ID=your_channel_id_here
 CONGRATS_CHANNEL_ID=your_congrats_channel_id_here
-TIMEZONE=UTC
-CHECK_TIME=07:00
+AI_CHANNEL_ID=your_ai_channel_id_here
 MALE_ROLE_ID=your_male_role_id_here
 FEMALE_ROLE_ID=your_female_role_id_here
+CHECK_TIME=00:00
+TIMEZONE=UTC
 
 # Azure Cosmos DB Configuration
 COSMOS_ENDPOINT=https://your-cosmosdb-name.documents.azure.com:443/
 COSMOS_KEY=your_cosmos_primary_key_here
 COSMOS_DB_NAME=BirthdayBotDB
+
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4o-mini
 ```
 
-### Step 2: Install Dependencies
+### Step 2: Enable Message Content Intent
+
+The AI assistant requires the Message Content privileged intent to read messages.
+
+1. Go to [discord.com/developers/applications](https://discord.com/developers/applications)
+2. Select your application
+3. Click **Bot** in the left sidebar
+4. Under **Privileged Gateway Intents**, enable **Message Content Intent**
+5. Click **Save Changes**
+
+If this intent is not enabled, the bot will start but the AI assistant will not respond to messages.
+
+### Step 3: Install Dependencies
 
 ```bash
 npm install
 ```
 
-This installs `@azure/cosmos` and other required packages.
-
-### Step 3: Test Locally (Optional)
+### Step 4: Register Slash Commands
 
 ```bash
-npm run dev
+node src/deploy-commands.js
 ```
 
-## Part 3: Deploy to Azure Web App
+### Step 5: Test Locally (Optional)
+
+```bash
+node src/index.js
+```
+
+## Part 3: Deploy to Azure App Service
 
 ### Option A: Using Azure CLI (Recommended)
 
@@ -135,19 +152,30 @@ az webapp config appsettings set \
     GUILD_ID="your_guild_id" \
     BIRTHDAY_CHANNEL_ID="your_channel_id" \
     CONGRATS_CHANNEL_ID="your_congrats_channel_id" \
-    TIMEZONE="UTC" \
-    CHECK_TIME="07:00" \
+    AI_CHANNEL_ID="your_ai_channel_id" \
     MALE_ROLE_ID="your_male_role_id" \
     FEMALE_ROLE_ID="your_female_role_id" \
+    CHECK_TIME="00:00" \
+    TIMEZONE="UTC" \
     COSMOS_ENDPOINT="your_cosmos_endpoint" \
     COSMOS_KEY="your_cosmos_key" \
     COSMOS_DB_NAME="BirthdayBotDB" \
+    OPENAI_API_KEY="your_openai_api_key" \
+    OPENAI_MODEL="gpt-4o-mini" \
     NODE_ENV="production"
 ```
 
 #### Step 4: Deploy Code
 
-##### Method A: Git Deployment
+Create a zip file and deploy:
+
+```bash
+# On Windows PowerShell
+Compress-Archive -Path ./* -DestinationPath app.zip -Force
+
+# On macOS/Linux
+zip -r app.zip . -x "node_modules/*" ".git/*" ".env"
+```
 
 ```bash
 az webapp deployment source config-zip \
@@ -156,76 +184,20 @@ az webapp deployment source config-zip \
   --src ./app.zip
 ```
 
-First, create the zip file:
+### Option B: GitHub Actions (CI/CD)
 
-```bash
-# On Windows PowerShell
-Compress-Archive -Path ./* -DestinationPath app.zip
+The repository includes GitHub Actions workflows in `.github/workflows/` that automatically deploy to Azure App Service on every push to the `main` branch. To use this:
 
-# On macOS/Linux
-zip -r app.zip . -x "node_modules/*" ".git/*"
-```
+1. Set the required GitHub Actions secrets in your repository settings
+2. Push to `main` — deployment happens automatically
 
-##### Method B: Direct Git Push
-
-```bash
-# Initialize git if not already done
-git init
-git add .
-git commit -m "Initial commit"
-
-# Add Azure remote
-az webapp deployment source config-local-git \
-  --resource-group birthday-bot-rg \
-  --name birthday-bot-app
-
-# Follow the git push command provided
-```
-
-### Option B: Using Docker Container
-
-#### Step 1: Create Container Registry (if not already done)
-
-```bash
-az acr create \
-  --resource-group birthday-bot-rg \
-  --name birthdaybot \
-  --sku Basic
-```
-
-#### Step 2: Build Docker Image
-
-```bash
-az acr build \
-  --registry birthdaybot \
-  --image birthday-bot:latest \
-  .
-```
-
-#### Step 3: Deploy Docker Image
-
-```bash
-az webapp create \
-  --resource-group birthday-bot-rg \
-  --plan birthday-bot-plan \
-  --name birthday-bot-app \
-  --deployment-container-image-name birthdaybot.azurecr.io/birthday-bot:latest
-```
-
-### Option B: Using Azure Portal UI
+### Option C: Using Azure Portal UI
 
 1. Go to [Azure Portal](https://portal.azure.com)
 2. Create a new App Service
-3. Configure:
-   - **Name**: birthday-bot-app
-   - **Runtime**: Node.js 18 LTS
-   - **Region**: Your preferred region
-4. Click "Create"
-5. After creation:
-   - Go to Deployment Center
-   - Choose your source (GitHub, Local Git, Zip)
-   - Configure environment variables in Configuration section
-   - Deploy
+3. Configure: Name, Node.js 18 LTS runtime, your region
+4. After creation, go to Deployment Center and configure your source
+5. Set environment variables in Configuration > Application settings
 
 ## Part 4: Verify Deployment
 
@@ -248,51 +220,17 @@ az webapp log tail \
 
 ### Test the Bot
 
-1. Invite bot to your Discord server
-2. Use `/birthday-set` command in Discord
-3. Check Cosmos DB in Azure Portal → Data Explorer to confirm data is saved
+1. Invite the bot to your Discord server
+2. Run `/birthday-set` — a modal should appear
+3. Check Cosmos DB in Azure Portal > Data Explorer to confirm data is saved
+4. Run `/birthday @yourself` to verify retrieval
+5. Run `/birthdays-coming` to list upcoming birthdays
+6. Test the AI assistant: @mention the bot with a question like "@BirthdayBot when is my birthday?"
+7. Send a message in `AI_CHANNEL_ID` without a mention — the bot should respond
 
-## Part 5: Data Migration (if migrating from birthdays.json)
+## Part 5: Monitoring and Maintenance
 
-If you have existing birthday data in `birthdays.json`:
-
-### Step 1: Create Migration Script
-
-Create `migrate.js`:
-
-```javascript
-const fs = require('fs').promises;
-const CosmosDBService = require('./src/services/CosmosDBService');
-
-async function migrate() {
-    try {
-        const data = await fs.readFile('birthdays.json', 'utf8');
-        const birthdays = JSON.parse(data);
-        
-        await CosmosDBService.migrateFromJson(birthdays);
-        console.log('✅ Migration complete!');
-    } catch (error) {
-        console.error('❌ Migration failed:', error);
-    }
-}
-
-migrate();
-```
-
-### Step 2: Run Migration Locally
-
-```bash
-node migrate.js
-```
-
-Or run it in Azure by SSH/Kudu console:
-
-1. Go to App Service → SSH
-2. Run: `node migrate.js`
-
-## Part 6: Monitoring and Maintenance
-
-### Set Up Application Insights
+### Set Up Application Insights (Optional)
 
 ```bash
 az monitor app-insights component create \
@@ -303,43 +241,45 @@ az monitor app-insights component create \
 
 ### Monitor Cosmos DB Costs
 
-- Go to Cosmos DB → Metrics
+- Go to Cosmos DB > Metrics in Azure Portal
 - Monitor RU (Request Units) consumption
-- Adjust throughput if needed
+- Serverless billing is per RU consumed — there is no minimum cost
 
 ### View Bot Logs
 
-In Azure Portal:
-1. Go to App Service → Log stream
-2. Observe real-time logs
+In Azure Portal: App Service > Log stream
 
 ## Troubleshooting
 
 ### Bot Not Starting
 
-Check logs:
 ```bash
 az webapp log tail --resource-group birthday-bot-rg --name birthday-bot-app
 ```
 
-Common issues:
-- Missing environment variables → Check Configuration section
-- Invalid Cosmos DB credentials → Verify COSMOS_ENDPOINT and COSMOS_KEY
+Common causes:
+- Missing environment variables — check Configuration section in Azure Portal
+- Invalid Cosmos DB credentials — verify `COSMOS_ENDPOINT` and `COSMOS_KEY`
+- Invalid OpenAI API key — verify `OPENAI_API_KEY`
+
+### AI Assistant Not Responding
+
+- Confirm Message Content Intent is enabled in Discord Developer Portal
+- Check `AI_CHANNEL_ID` is set to the correct channel ID
+- Verify `OPENAI_API_KEY` is valid and has sufficient credits
 
 ### Database Connection Failed
 
-1. Verify Cosmos DB is running
-2. Check COSMOS_ENDPOINT format (should have :443/ at the end)
-3. Verify COSMOS_KEY is correct
-4. Check firewall settings if needed
-
-### High Costs
-
-- Increase Cosmos DB throughput gradually
-- Use autoscale for variable workloads
-- Monitor Request Units (RUs) in metrics
+1. Verify `COSMOS_ENDPOINT` format — must end with `:443/`
+2. Check `COSMOS_KEY` is correct (Primary Key, not read-only)
+3. Confirm the `birthdays` container exists in database `BirthdayBotDB`
+4. Confirm partition key is `/userId`
 
 ## Scaling Considerations
+
+### Vertical Scaling (Larger Instance)
+
+Update SKU in Azure Portal: App Service Plan > Scale up
 
 ### Horizontal Scaling (More Instances)
 
@@ -350,57 +290,46 @@ az appservice plan update \
   --sku S1
 ```
 
-### Vertical Scaling (Larger Instance)
-
-Update SKU in Azure Portal: App Service Plan → Scale up
+Note: Discord bots are stateful (WebSocket connection). Running multiple instances requires additional coordination. For a small server, a single B1 instance is sufficient.
 
 ## Useful Commands
 
 ```bash
-# List all resources
+# List all resources in the group
 az resource list --resource-group birthday-bot-rg
 
 # Restart web app
 az webapp restart --resource-group birthday-bot-rg --name birthday-bot-app
 
-# Delete everything
-az group delete --resource-group birthday-bot-rg
-
 # Get app URL
 az webapp show --resource-group birthday-bot-rg --name birthday-bot-app --query "defaultHostName"
+
+# Delete everything (destructive)
+az group delete --resource-group birthday-bot-rg
 ```
 
 ## Cost Estimation
 
-- **App Service Plan (B1)**: ~$12/month
-- **Cosmos DB (400 RU/s)**: ~$0.05/hour (~$36/month)
-- **Total**: ~$48/month for small usage
+| Component | Estimated Cost |
+|-----------|---------------|
+| App Service Plan (B1) | ~$13/month |
+| Cosmos DB serverless | ~$0–1/month |
+| OpenAI gpt-4o-mini (small server) | ~$0.10–1/month |
+| **Total** | **~$14–15/month** |
 
-*Note: Check Azure Pricing for current rates*
+*Check [Azure Pricing](https://azure.microsoft.com/en-us/pricing/) and [OpenAI Pricing](https://openai.com/pricing) for current rates.*
 
 ## Security Best Practices
 
-1. ✅ Never commit `.env` to Git
-2. ✅ Use Azure Key Vault for sensitive data
-3. ✅ Enable authentication on Web App if needed
-4. ✅ Regularly rotate Discord token
-5. ✅ Review Cosmos DB access logs
-6. ✅ Use managed identities where possible
+1. Never commit `.env` to Git
+2. Use Azure Key Vault for production secrets if needed
+3. Regularly rotate your Discord token and OpenAI API key
+4. Review Cosmos DB access logs periodically
+5. Store all credentials as Azure App Service Application Settings, not in code
 
-## Next Steps
+## Support Resources
 
-1. Test the bot thoroughly in your Discord server
-2. Set up monitoring and alerts
-3. Create backup procedures for Cosmos DB
-4. Plan scaling strategy as user base grows
-5. Review Azure Cost Management reports
-
-## Support
-
-- [Azure Discord.js Documentation](https://discord.js.org/)
+- [Discord.js Documentation](https://discord.js.org/)
 - [Azure Cosmos DB Docs](https://docs.microsoft.com/en-us/azure/cosmos-db/)
 - [Azure App Service Docs](https://docs.microsoft.com/en-us/azure/app-service/)
-
----
-
-**Happy Birthday Bot Celebrating!** 🎉🎂
+- [OpenAI API Docs](https://platform.openai.com/docs/)

@@ -5,161 +5,148 @@ Use this checklist to ensure everything is properly configured before deploying.
 ## Pre-Deployment Checklist
 
 ### Code Preparation
-- [ ] All files updated to use `CosmosDBService` instead of `BirthdayService`
-- [ ] `package.json` updated with `@azure/cosmos` dependency
 - [ ] `npm install` run locally
-- [ ] Application starts without errors: `npm run dev`
+- [ ] Application starts without errors: `node src/index.js`
+- [ ] Slash commands registered: `node src/deploy-commands.js`
 - [ ] All commands work in local testing
 
+### Discord Developer Portal
+- [ ] Bot created and invited to the server
+- [ ] **Message Content Intent** enabled under Bot > Privileged Gateway Intents
+- [ ] Bot token copied to `DISCORD_TOKEN`
+
+### OpenAI Setup
+- [ ] OpenAI account created and API key obtained
+- [ ] `OPENAI_API_KEY` set in environment configuration
+- [ ] `OPENAI_MODEL` set (default: `gpt-4o-mini`)
+- [ ] API key has sufficient credits for usage
+
 ### Environment Configuration
-- [ ] `.env` file created with all required variables
+- [ ] `.env` file created with all 15 required variables
+- [ ] `DISCORD_TOKEN` is valid and current
+- [ ] `CLIENT_ID` is the application (not bot) client ID
+- [ ] `GUILD_ID` is the correct server ID
+- [ ] `BIRTHDAY_CHANNEL_ID` set to announcement channel
+- [ ] `CONGRATS_CHANNEL_ID` set to congrats channel
+- [ ] `AI_CHANNEL_ID` set to dedicated AI assistant channel
+- [ ] `MALE_ROLE_ID` and `FEMALE_ROLE_ID` set correctly
+- [ ] `CHECK_TIME` set (default: `00:00`)
+- [ ] `TIMEZONE` set correctly (default: `UTC`)
 - [ ] `COSMOS_ENDPOINT` is in format: `https://account-name.documents.azure.com:443/`
-- [ ] `COSMOS_KEY` copied correctly from Azure Portal
-- [ ] `COSMOS_DB_NAME` set to `BirthdayBotDB` (or your chosen name)
-- [ ] Discord token is valid and current
-- [ ] All Discord IDs are correct (GUILD_ID, CHANNEL_IDs, ROLE_IDs)
-- [ ] Timezone is set correctly (default: UTC)
-- [ ] Check time is set (default: 07:00)
-- [ ] `.env` is listed in `.gitignore` (never commit it!)
+- [ ] `COSMOS_KEY` copied correctly from Azure Portal (Primary Key)
+- [ ] `COSMOS_DB_NAME` set to `BirthdayBotDB`
+- [ ] `OPENAI_API_KEY` set
+- [ ] `OPENAI_MODEL` set to `gpt-4o-mini` (or your chosen model)
+- [ ] `.env` is listed in `.gitignore` (never commit it)
 
 ### Azure Resources Setup
-- [ ] Azure Account created
-- [ ] Resource Group created (e.g., `birthday-bot-rg`)
-- [ ] Cosmos DB Account created
+- [ ] Azure account created
+- [ ] Resource group created (e.g., `birthday-bot-rg`)
+- [ ] Cosmos DB account created (serverless capacity mode)
 - [ ] Database `BirthdayBotDB` created in Cosmos DB
 - [ ] Container `birthdays` created with partition key `/userId`
-- [ ] Cosmos DB throughput set (400 RU/s is free tier eligible)
-- [ ] Cosmos DB credentials copied to `.env`
-
-### Data Migration (if applicable)
-- [ ] `birthdays.json` exists with user birthdays
-- [ ] `npm run migrate` command executed successfully
-- [ ] Data verified in Azure Portal → Cosmos DB → Data Explorer
-- [ ] Migration log shows all records transferred
-- [ ] Old `birthdays.json` backed up
+- [ ] Cosmos DB credentials copied to environment configuration
 
 ### Code Quality
-- [ ] No hardcoded secrets or credentials in code
+- [ ] No hardcoded secrets or credentials in source code
 - [ ] Error handling present in all database operations
-- [ ] Logging statements added for debugging
-- [ ] Comments explain complex logic
-- [ ] Code follows existing project style
+- [ ] `.env` confirmed absent from git history
 
-### Testing
-- [ ] Bot invoked with `/birthday-set` command
-- [ ] Birthday data saved in Cosmos DB
-- [ ] `/birthday` command retrieves data correctly
-- [ ] `/birthdays-coming` lists upcoming birthdays
-- [ ] Notifications work at scheduled time
-- [ ] Error handling works (e.g., invalid dates)
+### Testing — Slash Commands
+- [ ] `/birthday-set` opens modal and saves birthday to Cosmos DB
+- [ ] `/birthday @user` retrieves and displays birthday correctly
+- [ ] `/birthdays-coming` lists upcoming birthdays correctly
+- [ ] Notifications send at scheduled time
+
+### Testing — AI Assistant
+- [ ] Bot responds when @mentioned in a regular channel
+- [ ] Bot responds to all messages in `AI_CHANNEL_ID` channel
+- [ ] AI can look up a user's birthday by name
+- [ ] AI can list upcoming birthdays
+- [ ] AI can set the requesting user's own birthday
+- [ ] AI refuses to set another user's birthday (permission enforcement)
+- [ ] Conversation history is maintained within a channel session
 
 ### Deployment Method Selection
 - [ ] Choose deployment method:
-  - [ ] **Option A**: Azure CLI (recommended for first-time)
-  - [ ] **Option B**: Docker Container
+  - [ ] **Option A**: GitHub Actions CI/CD (push to main)
+  - [ ] **Option B**: Azure CLI zip deploy
   - [ ] **Option C**: Azure Portal UI
 
-### Azure CLI Deployment (if Option A selected)
-- [ ] Azure CLI installed
+### Azure App Service Deployment
+- [ ] Azure CLI installed (if using CLI method)
 - [ ] `az login` executed successfully
-- [ ] Azure CLI defaults set correctly
-- [ ] App Service Plan created
-- [ ] Web App created
-- [ ] Environment variables configured in Azure
-- [ ] Code deployed (via zip or git)
-- [ ] Deployment successful
-
-### Docker Deployment (if Option B selected)
-- [ ] Docker installed locally
-- [ ] `Dockerfile` exists and configured
-- [ ] Azure Container Registry created
-- [ ] Docker image built successfully
-- [ ] Image pushed to ACR
-- [ ] Web App configured to use container
-- [ ] Container started successfully
+- [ ] App Service Plan created (B1, Linux)
+- [ ] Web App created (Node.js 18 LTS)
+- [ ] All 15 environment variables configured in Azure App Service
+- [ ] Code deployed successfully
+- [ ] App Service shows status: "Running"
 
 ### Post-Deployment Verification
-- [ ] Web App is running (status: "Running")
 - [ ] Bot appears online in Discord
-- [ ] `/birthday-set` command works
-- [ ] Data saves to Cosmos DB
+- [ ] `/birthday-set` command works in the live server
+- [ ] Birthday data visible in Cosmos DB Data Explorer
 - [ ] Logs accessible via `az webapp log tail`
 - [ ] No errors in application logs
+- [ ] AI assistant responds to @mention in the live server
+- [ ] AI assistant responds in `AI_CHANNEL_ID` channel
 - [ ] Daily notifications work at scheduled time
 
-### Monitoring & Maintenance
+### Monitoring and Maintenance
 - [ ] Application Insights configured (optional)
-- [ ] Cosmos DB metrics accessible
+- [ ] Cosmos DB metrics accessible in Azure Portal
 - [ ] Cost monitoring alerts set up
 - [ ] Backup strategy decided
-- [ ] Scaling plan understood
-
-### Documentation
-- [ ] `AZURE_DEPLOYMENT.md` read and understood
-- [ ] `QUICK_SETUP.md` bookmarked for reference
-- [ ] Team notified of deployment
-- [ ] Discord members informed of new features
 
 ## Troubleshooting Items
 
 ### If Bot Won't Start
-- [ ] Check environment variables: `az webapp config appsettings list`
-- [ ] View logs: `az webapp log tail`
-- [ ] Verify all required env vars are present
-- [ ] Check Cosmos DB credentials format
-- [ ] Restart app: `az webapp restart`
+- [ ] Check environment variables: `az webapp config appsettings list --resource-group birthday-bot-rg --name birthday-bot-app`
+- [ ] View logs: `az webapp log tail --resource-group birthday-bot-rg --name birthday-bot-app`
+- [ ] Verify all 15 required env vars are present
+- [ ] Restart app: `az webapp restart --resource-group birthday-bot-rg --name birthday-bot-app`
+
+### If AI Assistant Won't Respond
+- [ ] Confirm Message Content Intent is enabled in Discord Developer Portal
+- [ ] Verify `AI_CHANNEL_ID` matches the channel you are testing in
+- [ ] Check `OPENAI_API_KEY` is valid (test at platform.openai.com)
+- [ ] Review logs for OpenAI API errors
 
 ### If Cosmos DB Connection Fails
-- [ ] Verify COSMOS_ENDPOINT format (should end with `:443/`)
-- [ ] Check COSMOS_KEY is not expired
-- [ ] Ensure database exists in Cosmos DB account
-- [ ] Ensure container exists in database
-- [ ] Check firewall rules allow connection
+- [ ] Verify `COSMOS_ENDPOINT` format (must end with `:443/`)
+- [ ] Check `COSMOS_KEY` is the Primary Key (not read-only key)
+- [ ] Ensure database `BirthdayBotDB` exists in the Cosmos DB account
+- [ ] Ensure container `birthdays` exists with partition key `/userId`
 
 ### If Data Not Saving
 - [ ] Check Cosmos DB container exists
 - [ ] Verify partition key is `/userId`
-- [ ] Check RU consumption in metrics
-- [ ] Ensure write permissions enabled
-- [ ] Check error logs for specific errors
-
-### If Migration Fails
-- [ ] Verify `birthdays.json` exists and is valid JSON
-- [ ] Check Cosmos DB credentials are correct
-- [ ] Run migration in verbose mode: `npm run migrate 2>&1`
-- [ ] Ensure database exists before migration
-- [ ] Ensure container exists before migration
+- [ ] Check RU consumption in Cosmos DB metrics
+- [ ] Check error logs for specific error messages
 
 ## Rollback Plan
 
 If deployment fails:
-1. [ ] Revert code changes: `git checkout`
-2. [ ] Scale down Azure resources to save costs
-3. [ ] Review logs for error messages
-4. [ ] Fix identified issues
-5. [ ] Test locally before redeploying
+1. [ ] Revert code: `git checkout`
+2. [ ] Review logs for error messages
+3. [ ] Fix identified issues locally
+4. [ ] Test locally before redeploying
+5. [ ] Scale down Azure resources to save costs while fixing
 
 ## Post-Deployment Tasks
 
 ### Week 1
 - [ ] Monitor bot performance daily
 - [ ] Check Cosmos DB RU consumption
-- [ ] Verify notifications send on time
+- [ ] Verify birthday notifications send on time
 - [ ] Monitor error logs
-- [ ] Gather user feedback
-
-### Week 2-4
-- [ ] Optimize Cosmos DB throughput if needed
-- [ ] Set up automated backups
-- [ ] Document any issues encountered
-- [ ] Plan scaling if needed
+- [ ] Gather user feedback on AI assistant
 
 ### Ongoing
-- [ ] Monitor costs monthly
-- [ ] Update documentation
-- [ ] Keep Discord.js updated
-- [ ] Keep Azure SDK updated
-- [ ] Review security practices
+- [ ] Monitor costs monthly (~$14–15/month expected)
+- [ ] Keep Discord.js and OpenAI SDK updated
+- [ ] Rotate Discord token and OpenAI API key periodically
+- [ ] Review Azure security practices
 
 ## Quick Commands Reference
 
@@ -179,23 +166,24 @@ az webapp config appsettings set --resource-group birthday-bot-rg --name birthda
 # Restart app
 az webapp restart --resource-group birthday-bot-rg --name birthday-bot-app
 
-# View app URL
-az webapp show --resource-group birthday-bot-rg --name birthday-bot-app --query defaultHostName
+# List current settings
+az webapp config appsettings list --resource-group birthday-bot-rg --name birthday-bot-app
 
-# Delete all resources
+# Delete all resources (destructive)
 az group delete --resource-group birthday-bot-rg
 ```
 
 ## Success Criteria
 
-✅ All items checked = Ready for Production
+All items checked = Ready for Production
 
-- Bot is online and responding to commands
+- Bot is online and responding to slash commands
 - Birthdays save to Cosmos DB without errors
+- AI assistant responds to @mentions and in AI channel
+- AI correctly enforces birthday-setting permissions
 - Notifications send at scheduled times
 - No sensitive data visible in logs
-- Application performance is acceptable
-- Costs are within budget
+- Application costs are within ~$14–15/month budget
 
 ---
 
@@ -205,4 +193,4 @@ az group delete --resource-group birthday-bot-rg
 
 **Deployed By**: _______________
 
-**Notes**: 
+**Notes**:

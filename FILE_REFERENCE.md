@@ -1,325 +1,182 @@
-# 📚 Complete File Reference Guide
+# File Reference Guide - Birthday Bot
 
-## 🗂️ Directory Structure
+## Directory Structure
 
 ```
 Birthday-Bot/
 │
-├── 📄 Documentation Files (Start Here!)
-│   ├── INDEX.md                          ← Navigation guide
-│   ├── QUICK_SETUP.md                    ← Fast deployment (5 min)
-│   ├── MIGRATION_SUMMARY.md              ← What changed
-│   ├── AZURE_DEPLOYMENT.md               ← Detailed guide (50+ pages)
-│   ├── DEPLOYMENT_CHECKLIST.md           ← Verification
-│   └── COMPLETION_REPORT.md              ← This summary
+├── Documentation
+│   ├── README.md                         Main project overview and setup
+│   ├── INDEX.md                          Project navigation guide
+│   ├── QUICK_SETUP.md                    Concise setup checklist
+│   ├── AZURE_DEPLOYMENT.md               Full Azure deployment guide
+│   ├── DEPLOYMENT_CHECKLIST.md           Pre-deployment verification checklist
+│   ├── FILE_REFERENCE.md                 This file
+│   └── MIGRATION_SUMMARY.md              Changelog / what's new
 │
-├── 🔧 Configuration Files
-│   ├── .env                              ← Environment variables (UPDATE ME!)
-│   ├── .gitignore                        ← Git ignore rules
-│   ├── package.json                      ← Dependencies & scripts
-│   │
-│   └── Deployment Configs
-│       ├── Dockerfile                    ← Docker container definition
-│       ├── web.config                    ← Azure Web App config
-│       └── vercel.json                   ← Vercel deployment config
+├── Configuration
+│   ├── .env                              Environment variables (never commit)
+│   ├── .gitignore                        Git ignore rules
+│   └── package.json                      Node.js dependencies and scripts
 │
-├── 📦 Source Code (src/)
-│   ├── index.js                          ← Main bot file
-│   ├── config.js                         ← Configuration loader
-│   ├── deploy-commands.js                ← Discord command deployment
-│   │
-│   ├── commands/                         ← Discord slash commands
-│   │   ├── birthday-set.js              ← Set birthday command (UPDATED)
-│   │   ├── birthday.js                  ← Check birthday command (UPDATED)
-│   │   └── birthdays-coming.js          ← List birthdays command (UPDATED)
-│   │
-│   ├── services/                         ← Business logic services
-│   │   ├── CosmosDBService.js           ← ⭐ NEW: Cosmos DB integration
-│   │   ├── BirthdayService.js           ← DEPRECATED: Old JSON service
-│   │   ├── NotificationService.js       ← Notifications (UPDATED)
-│   │   └── SchedulerService.js          ← Scheduler (unchanged)
-│   │
-│   └── utils/                            ← Utility functions
-│       └── dateUtils.js                  ← Date operations (unchanged)
+├── CI/CD
+│   └── .github/
+│       └── workflows/
+│           ├── azure-webapp.yml          Azure deployment workflow
+│           └── main_birthday-bot.yml     Auto-deploy on push to main
 │
-├── 🔨 Tools & Scripts
-│   ├── migrate.js                        ← Data migration tool
-│   └── verify-setup.js                   ← Pre-deployment verification
-│
-├── 📊 Data Files
-│   ├── birthdays.json                    ← Current birthday data
-│   └── README.md                         ← Original project README
-│
-└── 🗃️ Hidden Directories
-    ├── .git/                             ← Git history
-    └── node_modules/                     ← Dependencies (not in git)
+└── src/
+    ├── index.js                          Bot entry point and event handlers
+    ├── config.js                         Environment variable loader
+    ├── deploy-commands.js                Registers slash commands with Discord
+    │
+    ├── commands/
+    │   ├── birthday-set.js               /birthday-set slash command
+    │   ├── birthday.js                   /birthday @user slash command
+    │   └── birthdays-coming.js           /birthdays-coming slash command
+    │
+    ├── services/
+    │   ├── AIService.js                  NEW: OpenAI assistant with function calling
+    │   ├── BirthdayService.js            DEPRECATED: unused, kept for reference
+    │   ├── CosmosDBService.js            Azure Cosmos DB read/write service
+    │   ├── NotificationService.js        Birthday announcement logic
+    │   └── SchedulerService.js           Daily birthday check scheduler
+    │
+    └── utils/
+        └── dateUtils.js                  Date parsing and formatting helpers
 ```
 
-## 📖 Documentation Guide
+## File Descriptions
 
-### Entry Points by Use Case
+### Entry Point
 
-#### 🚀 "I want to deploy NOW"
-1. **[QUICK_SETUP.md](QUICK_SETUP.md)** (5 min) - Commands to run
-2. **[DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)** - Verify setup
+#### src/index.js
+The bot's main file. Handles:
+- Discord client initialization
+- Slash command interaction routing
+- MessageCreate event — routes @mentions and AI_CHANNEL_ID messages to AIService
+- SchedulerService startup
 
-#### 📚 "Tell me everything"
-1. **[MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md)** - What changed
-2. **[AZURE_DEPLOYMENT.md](AZURE_DEPLOYMENT.md)** - Deep dive (50+ pages)
+#### src/config.js
+Loads all environment variables from `.env` into a config object used across the application. Includes all 15 variables.
 
-#### 🔧 "I need help with X"
-| Problem | Resource |
-|---------|----------|
-| Cosmos DB setup | [AZURE_DEPLOYMENT.md#part-1](AZURE_DEPLOYMENT.md) |
-| App deployment | [AZURE_DEPLOYMENT.md#part-3](AZURE_DEPLOYMENT.md) |
-| Data migration | [QUICK_SETUP.md](QUICK_SETUP.md) + [migrate.js](migrate.js) |
-| Troubleshooting | [AZURE_DEPLOYMENT.md#troubleshooting](AZURE_DEPLOYMENT.md) |
-| Cost management | [AZURE_DEPLOYMENT.md#part-6](AZURE_DEPLOYMENT.md) |
-| Scaling | [AZURE_DEPLOYMENT.md#scaling-considerations](AZURE_DEPLOYMENT.md) |
-
----
-
-## 🔄 Migration Workflow
-
-```
-START
-  │
-  ├─► Review COMPLETION_REPORT.md (2 min)
-  │
-  ├─► Read QUICK_SETUP.md (5 min)
-  │
-  ├─► Create Cosmos DB in Azure (5 min)
-  │
-  ├─► Update .env file (2 min)
-  │   └─► COSMOS_ENDPOINT=...
-  │   └─► COSMOS_KEY=...
-  │   └─► COSMOS_DB_NAME=...
-  │
-  ├─► Run: npm install (1 min)
-  │
-  ├─► Run: npm run migrate (1 min)
-  │   └─► Transfers birthdays.json → Cosmos DB
-  │
-  ├─► Run: node verify-setup.js (1 min)
-  │   └─► Check everything is correct
-  │
-  ├─► Choose deployment method:
-  │   ├─► Option A: Azure CLI
-  │   ├─► Option B: Docker
-  │   └─► Option C: Azure Portal
-  │
-  ├─► Deploy using QUICK_SETUP.md commands
-  │
-  ├─► Use DEPLOYMENT_CHECKLIST.md to verify
-  │
-  └─► Done! Bot is live on Azure
-```
-
----
-
-## 📋 File Descriptions
-
-### Core Services
-
-#### [src/services/CosmosDBService.js](src/services/CosmosDBService.js)
-**Status**: ✅ NEW & ACTIVE  
-**Purpose**: Cloud database abstraction layer  
-**Methods**:
-- `initialize()` - Connect to Cosmos DB
-- `setBirthday(userId, month, day)` - Add/update birthday
-- `getBirthday(userId)` - Fetch one birthday
-- `getAllBirthdays()` - Fetch all birthdays
-- `getBirthdaysByDate(month, day)` - Query by date
-- `getTodaysBirthdays()` - Get today's celebrants
-- `migrateFromJson(jsonData)` - Import from JSON
-
-#### [src/services/BirthdayService.js](src/services/BirthdayService.js)
-**Status**: ⚠️ DEPRECATED  
-**Purpose**: Old local JSON storage  
-**Note**: Kept for reference; replaced by CosmosDBService
+#### src/deploy-commands.js
+One-time (or on-change) script that registers slash command definitions with the Discord API for the configured guild.
 
 ### Commands
 
-All three commands maintain the same API but now use `CosmosDBService`:
+#### src/commands/birthday-set.js
+Handles the `/birthday-set` slash command. Opens a modal dialog asking for the user's birthday in DD/MM format, validates the input, and saves it to Cosmos DB via CosmosDBService.
 
-#### [src/commands/birthday-set.js](src/commands/birthday-set.js)
-**Command**: `/birthday-set`  
-**Action**: Opens date picker modal, saves birthday to Cosmos DB  
-**Updated**: ✅ Now uses CosmosDBService
+#### src/commands/birthday.js
+Handles the `/birthday @user` slash command. Looks up a user's birthday in Cosmos DB and displays the date along with the number of days until the next occurrence.
 
-#### [src/commands/birthday.js](src/commands/birthday.js)
-**Command**: `/birthday @user`  
-**Action**: Shows user's birthday with countdown  
-**Updated**: ✅ Now uses CosmosDBService
+#### src/commands/birthdays-coming.js
+Handles the `/birthdays-coming` slash command. Queries Cosmos DB for all birthdays occurring in the next 7 days and returns a formatted list.
 
-#### [src/commands/birthdays-coming.js](src/commands/birthdays-coming.js)
-**Command**: `/birthdays-coming`  
-**Action**: Lists birthdays in next 7 days  
-**Updated**: ✅ Now uses CosmosDBService
+### Services
+
+#### src/services/AIService.js
+NEW — Added in v2.0.
+
+Implements the conversational AI assistant using the OpenAI API (gpt-4o-mini). Key behaviors:
+- Triggered by @mention in any channel, or any message in AI_CHANNEL_ID
+- Maintains per-channel conversation history (capped at 20 messages)
+- Uses OpenAI function calling (tool use) to interact with Cosmos DB
+- Available tools: query a birthday, list upcoming birthdays, set own birthday
+- Permission enforcement: users can only set their own birthday
+
+#### src/services/CosmosDBService.js
+Provides the data access layer for Azure Cosmos DB. Methods include:
+- `initialize()` — connects and ensures database/container exist
+- `setBirthday(userId, month, day)` — upserts a birthday record
+- `getBirthday(userId)` — fetches one user's birthday
+- `getAllBirthdays()` — fetches all birthday records
+- `getBirthdaysByDate(month, day)` — queries by month and day
+- `getTodaysBirthdays()` — returns today's celebrants
+
+#### src/services/BirthdayService.js
+DEPRECATED. The original local JSON file-based birthday service. Kept for reference. Not used by any active code.
+
+#### src/services/NotificationService.js
+Handles sending birthday announcement messages to the configured Discord channels and assigning birthday roles.
+
+#### src/services/SchedulerService.js
+Sets up a cron-style scheduler that runs the birthday check daily at the configured CHECK_TIME and TIMEZONE.
+
+### Utilities
+
+#### src/utils/dateUtils.js
+Date parsing, formatting, and calculation helpers used across commands and services.
 
 ### Configuration
 
-#### [.env](.env)
-**Status**: ⚠️ UPDATE REQUIRED  
-**Contains**:
-```
-Discord credentials (don't change)
-DISCORD_TOKEN=...
-CLIENT_ID=...
-GUILD_ID=...
-BIRTHDAY_CHANNEL_ID=...
-CONGRATS_CHANNEL_ID=...
+#### .env
+Local secrets file. Must never be committed to Git (it is listed in .gitignore).
+
+All 15 required variables:
+
+```env
+DISCORD_TOKEN=
+CLIENT_ID=
+GUILD_ID=
+BIRTHDAY_CHANNEL_ID=
+CONGRATS_CHANNEL_ID=
+AI_CHANNEL_ID=
+MALE_ROLE_ID=
+FEMALE_ROLE_ID=
+CHECK_TIME=00:00
 TIMEZONE=UTC
-CHECK_TIME=07:00
-MALE_ROLE_ID=...
-FEMALE_ROLE_ID=...
-
-Azure credentials (ADD THESE!)
-COSMOS_ENDPOINT=https://your-account.documents.azure.com:443/
-COSMOS_KEY=your_primary_key
+COSMOS_ENDPOINT=
+COSMOS_KEY=
 COSMOS_DB_NAME=BirthdayBotDB
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
 ```
 
-#### [src/config.js](src/config.js)
-**Status**: ✅ UPDATED  
-**Purpose**: Loads environment variables into config object  
-**Added**:
-- `cosmosEndpoint`
-- `cosmosKey`
-- `cosmosDbName`
+#### package.json
+Node.js project manifest. Key production dependencies:
+- `discord.js` v14 — Discord API client
+- `@azure/cosmos` — Azure Cosmos DB SDK
+- `openai` — OpenAI API client
+- `node-cron` — Scheduler
 
-#### [package.json](package.json)
-**Status**: ✅ UPDATED  
-**Changes**:
-- Added: `@azure/cosmos` dependency
-- Added: `npm run migrate` script
-- Existing scripts preserved
+## What Changed (Summary)
 
-### Tools & Scripts
+### v2.0 — AI Assistant
 
-#### [migrate.js](migrate.js)
-**Status**: ✅ NEW  
-**Purpose**: Data migration tool  
-**Usage**: `npm run migrate`  
-**Does**:
-- Reads birthdays.json
-- Uploads to Cosmos DB
-- Logs progress
-- Error handling
+| Item | Change |
+|------|--------|
+| `src/services/AIService.js` | NEW — OpenAI-powered AI assistant |
+| `src/index.js` | Updated — added MessageCreate handler for AI |
+| `src/config.js` | Updated — added AI_CHANNEL_ID, OPENAI_API_KEY, OPENAI_MODEL |
+| `package.json` | Updated — added `openai` dependency |
+| `.env` | Updated — added AI_CHANNEL_ID, OPENAI_API_KEY, OPENAI_MODEL |
 
-#### [verify-setup.js](verify-setup.js)
-**Status**: ✅ NEW  
-**Purpose**: Pre-deployment verification  
-**Usage**: `node verify-setup.js`  
-**Checks**:
-- File structure
-- Configuration
-- Dependencies
-- Environment variables
-- Cosmos DB setup
+### v1.0 — Cosmos DB Migration
 
-### Deployment
+| Item | Change |
+|------|--------|
+| `src/services/CosmosDBService.js` | NEW — replaced local JSON storage |
+| `src/commands/*.js` | Updated — all use CosmosDBService |
+| `src/services/NotificationService.js` | Updated — uses CosmosDBService |
+| `src/config.js` | Updated — added COSMOS_* variables |
+| `package.json` | Updated — added `@azure/cosmos` dependency |
 
-#### [Dockerfile](Dockerfile)
-**Status**: ✅ NEW  
-**Purpose**: Docker containerization  
-**Base**: node:18-alpine  
-**Use case**: Container deployment to Azure
+### Removed (no longer in project)
+- `migrate.js` — data migration script (deleted, no longer needed)
+- `verify-setup.js` — pre-deployment verification script (deleted)
+- `birthdays.json` — local JSON birthday storage (deleted, data is in Cosmos DB)
+- `run_test.js` — test runner (deleted)
 
-#### [web.config](web.config)
-**Status**: ✅ NEW  
-**Purpose**: Azure App Service configuration  
-**Defines**: Node version, startup commands
-
-#### [vercel.json](vercel.json)
-**Status**: ✅ NEW  
-**Purpose**: Vercel platform config  
-**Alternative**: If deploying to Vercel instead
-
----
-
-## 🎯 Key Files by Function
-
-### To Deploy the Bot
-1. [QUICK_SETUP.md](QUICK_SETUP.md) - Read first
-2. [Dockerfile](Dockerfile) OR [web.config](web.config) OR Portal UI
-3. [AZURE_DEPLOYMENT.md](AZURE_DEPLOYMENT.md) - Reference for issues
-
-### To Migrate Data
-1. [migrate.js](migrate.js) - Run this
-2. [AZURE_DEPLOYMENT.md#part-5](AZURE_DEPLOYMENT.md) - Detailed instructions
-
-### To Troubleshoot
-1. [verify-setup.js](verify-setup.js) - Run this first
-2. [AZURE_DEPLOYMENT.md#troubleshooting](AZURE_DEPLOYMENT.md) - Solutions
-3. [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) - Verification
-
-### To Understand Changes
-1. [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) - Overview
-2. [COMPLETION_REPORT.md](COMPLETION_REPORT.md) - Detailed report
-3. [src/services/CosmosDBService.js](src/services/CosmosDBService.js) - Code
-
----
-
-## 📊 What Changed (Quick Summary)
-
-### Files Modified (5)
-| File | What Changed |
-|------|--------------|
-| package.json | Added @azure/cosmos + npm scripts |
-| .env | Added Cosmos DB variables |
-| src/config.js | Added Cosmos configuration |
-| .gitignore | Enhanced security |
-| 4 service/command files | Updated to use CosmosDBService |
-
-### Files Created (12)
-| File | Purpose |
-|------|---------|
-| src/services/CosmosDBService.js | Cloud database service |
-| Dockerfile | Container definition |
-| web.config | Azure config |
-| vercel.json | Vercel config |
-| migrate.js | Data migration |
-| verify-setup.js | Setup verification |
-| QUICK_SETUP.md | Fast deployment |
-| AZURE_DEPLOYMENT.md | Detailed guide |
-| MIGRATION_SUMMARY.md | Change summary |
-| DEPLOYMENT_CHECKLIST.md | Launch checklist |
-| INDEX.md | Navigation |
-| COMPLETION_REPORT.md | This summary |
-
----
-
-## 🔐 Security Files
-
-- [.env](.env) - **NEVER commit** ✋
-- [.gitignore](.gitignore) - **UPDATED** - prevents committing secrets
-- [src/config.js](src/config.js) - **UPDATED** - loads from environment
-
----
-
-## 📞 File Access Quick Links
+## Quick Navigation
 
 | Need | File |
 |------|------|
-| Quick deploy | [QUICK_SETUP.md](QUICK_SETUP.md) |
-| All details | [AZURE_DEPLOYMENT.md](AZURE_DEPLOYMENT.md) |
-| Before launch | [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) |
-| Understand changes | [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) |
-| Find anything | [INDEX.md](INDEX.md) |
-| Verify setup | [verify-setup.js](verify-setup.js) |
-| Migrate data | [migrate.js](migrate.js) |
-
----
-
-## ✨ Key Takeaways
-
-1. **START**: Read [QUICK_SETUP.md](QUICK_SETUP.md)
-2. **SETUP**: Create Cosmos DB + update .env
-3. **TEST**: Run `npm run migrate` and `node verify-setup.js`
-4. **DEPLOY**: Follow commands in [QUICK_SETUP.md](QUICK_SETUP.md)
-5. **VERIFY**: Use [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md)
-
----
-
-**Your bot is ready. Start with [QUICK_SETUP.md](QUICK_SETUP.md)! 🚀**
+| Initial setup | [QUICK_SETUP.md](QUICK_SETUP.md) |
+| Full deployment guide | [AZURE_DEPLOYMENT.md](AZURE_DEPLOYMENT.md) |
+| Pre-launch verification | [DEPLOYMENT_CHECKLIST.md](DEPLOYMENT_CHECKLIST.md) |
+| Project overview | [README.md](README.md) |
+| Changelog | [MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md) |
+| AI assistant code | [src/services/AIService.js](src/services/AIService.js) |
+| Database code | [src/services/CosmosDBService.js](src/services/CosmosDBService.js) |
