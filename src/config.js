@@ -15,5 +15,11 @@ module.exports = {
     // Azure CosmosDB Configuration
     cosmosEndpoint: process.env.COSMOS_ENDPOINT,
     cosmosKey: process.env.COSMOS_KEY,
-    cosmosDbName: process.env.COSMOS_DB_NAME || 'BirthdayBotDB'
+    cosmosDbName: process.env.COSMOS_DB_NAME || 'BirthdayBotDB',
+
+    // OpenAI (AI assistant)
+    openaiKey: process.env.OPENAI_API_KEY,
+    openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    aiChannelId: process.env.AI_CHANNEL_ID,
+    aiMaxHistory: parseInt(process.env.AI_MAX_HISTORY || '20', 10)
 };

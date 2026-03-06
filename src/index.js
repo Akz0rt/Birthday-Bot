@@ -9,9 +9,16 @@ const path = require('path');
 const config = require('./config');
 const SchedulerService = require('./services/SchedulerService');
 const NotificationService = require('./services/NotificationService');
+const AIService = require('./services/AIService');
 
 // Create a new client instance
-const client = new Client({ intents: [GatewayIntentBits.Guilds] });
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
+});
 
 // Create a collection for commands
 client.commands = new Collection();
@@ -65,6 +72,53 @@ client.on(Events.InteractionCreate, async interaction => {
                 ephemeral: true 
             });
         }
+    }
+});
+
+client.on(Events.MessageCreate, async message => {
+    if (message.author.bot) return;
+    if (!message.guild) return;
+
+    const isAIChannel = message.channelId === config.aiChannelId;
+    const isMentioned = message.mentions.has(client.user);
+    if (!isAIChannel && !isMentioned) return;
+
+    let userContent = message.content
+        .replace(`<@${client.user.id}>`, '')
+        .replace(`<@!${client.user.id}>`, '')
+        .trim();
+
+    if (!userContent) {
+        await message.reply('Привет! Чем могу помочь?');
+        return;
+    }
+
+    await message.channel.sendTyping();
+
+    try {
+        const member = await message.guild.members.fetch(message.author.id);
+        const displayName = member.displayName || message.author.username;
+
+        const aiResponse = await AIService.processMessage(
+            userContent,
+            message.author.id,
+            displayName,
+            message.channelId,
+            message.guild
+        );
+
+        if (aiResponse.length > 2000) {
+            const firstChunk = aiResponse.slice(0, 1990);
+            const splitAt = firstChunk.lastIndexOf('\n') > 1500
+                ? firstChunk.lastIndexOf('\n') : 1990;
+            await message.reply(aiResponse.slice(0, splitAt));
+            await message.channel.send(aiResponse.slice(splitAt));
+        } else {
+            await message.reply(aiResponse);
+        }
+    } catch (error) {
+        console.error('Error processing AI message:', error);
+        await message.reply('Произошла ошибка, попробуй ещё раз.');
     }
 });
 

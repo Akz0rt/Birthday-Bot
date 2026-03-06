@@ -55,3 +55,16 @@ birthdays.json
 *.swp
 *.swo
 .DS_Store
+
+# Deployment artifacts
+app_deploy.zip
+*.zip
+
+# Azure logs
+webapp_logs/
+webapp_latest_logs/
+webapp_logs_extracted/
+latest_logs/
+
+# Claude temp files
+tmpclaude-*
