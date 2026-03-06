@@ -41,9 +41,9 @@ const TOOLS = [
                 properties: {
                     days: {
                         type: 'integer',
-                        description: 'Number of days to look ahead (1-30). Default is 7.',
+                        description: 'Number of days to look ahead (1-365). Default is 7.',
                         minimum: 1,
-                        maximum: 30
+                        maximum: 365
                     }
                 }
             }
@@ -229,19 +229,13 @@ OUTPUT FORMAT:
                     if (!guild) {
                         return JSON.stringify({ found: false, error: 'No guild context' });
                     }
-                    const searchName = args.name.toLowerCase();
-                    const members = await guild.members.fetch();
+                    const members = await guild.members.fetch({ query: args.name, limit: 10 });
                     const matches = members
-                        .filter(m =>
-                            m.displayName.toLowerCase().includes(searchName) ||
-                            m.user.username.toLowerCase().includes(searchName)
-                        )
                         .map(m => ({
                             user_id: m.user.id,
                             display_name: m.displayName,
                             username: m.user.username
-                        }))
-                        .slice(0, 5);
+                        }));
                     return JSON.stringify({ found: matches.length > 0, matches });
                 }
 
