@@ -113,20 +113,22 @@ class CosmosDBService {
 
         try {
             // Support legacy records where month/day may be stored as strings.
-            const query = `
-                SELECT c.userId FROM c
-                WHERE (c.month = @month OR c.month = @monthStr)
-                  AND (c.day = @day OR c.day = @dayStr)
-            `;
+            const querySpec = {
+                query: `
+                    SELECT c.userId FROM c
+                    WHERE (c.month = @month OR c.month = @monthStr)
+                      AND (c.day = @day OR c.day = @dayStr)
+                `,
+                parameters: [
+                    { name: "@month", value: month },
+                    { name: "@day", value: day },
+                    { name: "@monthStr", value: String(month) },
+                    { name: "@dayStr", value: String(day) }
+                ]
+            };
+
             const { resources: items } = await this.container.items
-                .query(query, {
-                    parameters: [
-                        { name: "@month", value: month },
-                        { name: "@day", value: day },
-                        { name: "@monthStr", value: String(month) },
-                        { name: "@dayStr", value: String(day) }
-                    ]
-                })
+                .query(querySpec)
                 .fetchAll();
 
             return items.map((item) => item.userId);
