@@ -112,12 +112,19 @@ class CosmosDBService {
         await this.initialize();
 
         try {
-            const query = `SELECT c.userId FROM c WHERE c.month = @month AND c.day = @day`;
+            // Support legacy records where month/day may be stored as strings.
+            const query = `
+                SELECT c.userId FROM c
+                WHERE (c.month = @month OR c.month = @monthStr)
+                  AND (c.day = @day OR c.day = @dayStr)
+            `;
             const { resources: items } = await this.container.items
                 .query(query, {
                     parameters: [
                         { name: "@month", value: month },
-                        { name: "@day", value: day }
+                        { name: "@day", value: day },
+                        { name: "@monthStr", value: String(month) },
+                        { name: "@dayStr", value: String(day) }
                     ]
                 })
                 .fetchAll();
@@ -133,9 +140,23 @@ class CosmosDBService {
     }
 
     async getTodaysBirthdays() {
-        const today = new Date();
-        const month = today.getMonth() + 1;
-        const day = today.getDate();
+        // Derive calendar date in configured timezone to avoid server TZ mismatch.
+        const formatter = new Intl.DateTimeFormat('en-CA', {
+            timeZone: config.timezone,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
+
+        const parts = formatter.formatToParts(new Date());
+        const month = parseInt(parts.find(part => part.type === 'month')?.value, 10);
+        const day = parseInt(parts.find(part => part.type === 'day')?.value, 10);
+
+        if (!Number.isInteger(month) || !Number.isInteger(day)) {
+            throw new Error(`Failed to compute today's date for timezone ${config.timezone}`);
+        }
+
+        console.log(`Checking birthdays for ${day}/${month} in timezone ${config.timezone}`);
 
         return await this.getBirthdaysByDate(month, day);
     }

@@ -25,6 +25,7 @@ class NotificationService {
 
     async sendBirthdayNotifications() {
         const birthdayUsers = await CosmosDBService.getTodaysBirthdays();
+        console.log(`Found ${birthdayUsers.length} birthday user(s) for today`);
 
         // Use congratsChannel for sending congratulations; fall back to announceChannel
         const targetChannel = this.congratsChannel || this.announceChannel;
