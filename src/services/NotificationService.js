@@ -24,11 +24,20 @@ class NotificationService {
     }
 
     async sendBirthdayNotifications() {
+        const birthdayUsers = await CosmosDBService.getTodaysBirthdays();
+
         // Use congratsChannel for sending congratulations; fall back to announceChannel
         const targetChannel = this.congratsChannel || this.announceChannel;
-        if (!targetChannel) return;
-
-        const birthdayUsers = await CosmosDBService.getTodaysBirthdays();
+        if (!targetChannel) {
+            if (birthdayUsers.length > 0) {
+                console.warn(
+                    `Found ${birthdayUsers.length} birthdays today, but no notification channel is configured/reachable.`
+                );
+            } else {
+                console.log('No birthdays today and no notification channel configured.');
+            }
+            return;
+        }
 
         if (birthdayUsers.length > 0) {
             for (const userId of birthdayUsers) {

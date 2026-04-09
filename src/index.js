@@ -36,19 +36,39 @@ for (const file of commandFiles) {
 client.once(Events.ClientReady, async () => {
     console.log('Discord bot is ready! 🎉');
     
-    // Set up birthday channel for notifications
-    const announceChannel = client.channels.cache.get(config.birthdayChannel);
-    const congratsChannel = client.channels.cache.get(config.congratsChannel);
+    const fetchChannelById = async (channelId, envName) => {
+        if (!channelId) {
+            console.warn(`${envName} is not set`);
+            return null;
+        }
+
+        try {
+            const channel = await client.channels.fetch(channelId);
+            if (!channel || !channel.isTextBased?.()) {
+                console.warn(`${envName} (${channelId}) is not a text channel`);
+                return null;
+            }
+            return channel;
+        } catch (error) {
+            console.error(`Failed to fetch channel for ${envName} (${channelId}):`, error.message || error);
+            return null;
+        }
+    };
+
+    // Fetch channels directly from API to avoid cache-miss on startup
+    const announceChannel = await fetchChannelById(config.birthdayChannel, 'BIRTHDAY_CHANNEL_ID');
+    const congratsChannel = await fetchChannelById(config.congratsChannel, 'CONGRATS_CHANNEL_ID');
+
+    NotificationService.setChannels(announceChannel, congratsChannel);
 
     if (announceChannel || congratsChannel) {
-        NotificationService.setChannels(announceChannel, congratsChannel);
         console.log('Notification channels configured successfully');
-
-        // Start the birthday scheduler (includes initial check)
-        SchedulerService.start();
     } else {
-        console.error('No notification channels found! Please check BIRTHDAY_CHANNEL_ID and CONGRATS_CHANNEL_ID in .env');
+        console.error('No notification channels found. Birthday checks will still run, but messages cannot be sent.');
     }
+
+    // Always start scheduler so daily DB checks are not skipped
+    SchedulerService.start();
 });
 
 client.on(Events.InteractionCreate, async interaction => {
