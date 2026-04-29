@@ -127,7 +127,7 @@ class AIService {
 
 Personality: Friendly, warm, and celebratory. Respond in the same language the user writes in (Russian or English).
 
-SPEAKER GENDER: ${authorGender === 'male' ? 'The user is male — use masculine grammatical forms and addressing when speaking to them (e.g. in Russian: «ты установил», «дорогой», etc.).' : authorGender === 'female' ? 'The user is female — use feminine grammatical forms and addressing when speaking to them (e.g. in Russian: «ты установила», «дорогая», etc.).' : 'Gender is unknown — use gender-neutral or non-gendered forms when addressing the user.'}
+SPEAKER GENDER: ${authorGender === 'male' ? 'The user is male — use masculine grammatical forms and addressing when speaking to them.' : authorGender === 'female' ? 'The user is female — use feminine grammatical forms and addressing when speaking to them.' : 'Gender is unknown — use gender-neutral or non-gendered forms when addressing the user.'}
 
 Capabilities:
 - Look up anyone's birthday
