@@ -19,7 +19,7 @@ module.exports = {
 
     // OpenAI (AI assistant)
     openaiKey: process.env.OPENAI_API_KEY,
-    openaiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    openaiModel: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
     aiChannelId: process.env.AI_CHANNEL_ID,
     aiMaxHistory: parseInt(process.env.AI_MAX_HISTORY || '20', 10)
 };

@@ -119,12 +119,20 @@ client.on(Events.MessageCreate, async message => {
         const member = await message.guild.members.fetch(message.author.id);
         const displayName = member.displayName || message.author.username;
 
+        let authorGender = null;
+        if (config.maleRoleId && member.roles.cache.has(config.maleRoleId)) {
+            authorGender = 'male';
+        } else if (config.femaleRoleId && member.roles.cache.has(config.femaleRoleId)) {
+            authorGender = 'female';
+        }
+
         const aiResponse = await AIService.processMessage(
             userContent,
             message.author.id,
             displayName,
             message.channelId,
-            message.guild
+            message.guild,
+            authorGender
         );
 
         if (aiResponse.length > 2000) {
