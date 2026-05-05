@@ -78,7 +78,15 @@ function createApp() {
     const app = express();
 
     if (!config.adminPassword) {
-        throw new Error('ADMIN_PASSWORD env var is not set. Refusing to start the admin dashboard without a password.');
+        console.error('❌ ADMIN_PASSWORD is not set. Admin dashboard is disabled — set this env var in Azure App Settings.');
+        // Serve a safe placeholder on all routes so the container starts successfully
+        app.use((req, res) => {
+            res.status(503).send(
+                '<h2>Admin dashboard is not available.</h2>' +
+                '<p>Set the <code>ADMIN_PASSWORD</code> environment variable in Azure App Settings, then restart the bot.</p>'
+            );
+        });
+        return app;
     }
 
     // Basic Auth — challenge every request
