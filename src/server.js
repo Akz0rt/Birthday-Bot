@@ -139,8 +139,8 @@ function createApp() {
         }
     });
 
-    // Fallback — serve the SPA for any unknown route
-    app.get('*', (req, res) => {
+    // Fallback — serve the SPA for any unknown route (Express 5 compatible)
+    app.use((req, res) => {
         res.sendFile(path.join(__dirname, 'dashboard', 'index.html'));
     });
 
