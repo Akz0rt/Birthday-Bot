@@ -10,7 +10,9 @@
     "migrate": "node migrate.js"
   },
   "dependencies": {
+    "@azure/arm-appservice": "^18.0.0",
     "@azure/cosmos": "^4.0.0",
+    "@azure/identity": "^4.13.1",
     "discord.js": "^14.13.0",
     "dotenv": "^16.3.1",
     "express": "^5.2.1",

@@ -3,6 +3,7 @@ const basicAuth = require('express-basic-auth');
 const path = require('path');
 const config = require('./config');
 const SettingsService = require('./services/SettingsService');
+const AzureManagementService = require('./services/AzureManagementService');
 const AIService = require('./services/AIService');
 const state = require('./state');
 
@@ -55,11 +56,38 @@ function buildSettingsResponse(dbOverrides) {
     return result;
 }
 
+// Known app setting keys we manage — used to reconstruct full Azure App Settings on update
+const KNOWN_APP_SETTING_KEYS = [
+    ...EDITABLE_SETTINGS,
+    'DISCORD_TOKEN', 'CLIENT_ID', 'GUILD_ID', 'COSMOS_ENDPOINT', 'COSMOS_KEY',
+    'COSMOS_DB_NAME', 'OPENAI_API_KEY', 'ADMIN_USER', 'ADMIN_PASSWORD',
+    'AZURE_SUBSCRIPTION_ID', 'AZURE_RESOURCE_GROUP', 'AZURE_WEBAPP_NAME',
+    'BIRTHDAY_CHANNEL_ID', 'CONGRATS_CHANNEL_ID'
+];
+
+// Simple in-memory rate limiter for /api/chat
+const chatRateLimit = {
+    counts: new Map(),
+    WINDOW_MS: 60 * 1000,  // 1 minute
+    MAX_REQUESTS: 10,
+    check(ip) {
+        const now = Date.now();
+        const entry = this.counts.get(ip);
+        if (!entry || now - entry.start > this.WINDOW_MS) {
+            this.counts.set(ip, { start: now, count: 1 });
+            return true;
+        }
+        if (entry.count >= this.MAX_REQUESTS) return false;
+        entry.count++;
+        return true;
+    }
+};
+
 function createApp() {
     const app = express();
 
     if (!config.adminPassword) {
-        console.warn('⚠️  ADMIN_PASSWORD is not set — web dashboard is accessible without a password. Set ADMIN_PASSWORD env var!');
+        throw new Error('ADMIN_PASSWORD env var is not set. Refusing to start the admin dashboard without a password.');
     }
 
     // Basic Auth — challenge every request
@@ -85,7 +113,7 @@ function createApp() {
         }
     });
 
-    // POST /api/settings — save overrides to Cosmos DB (editable keys only)
+    // POST /api/settings — save to Cosmos DB + Azure App Settings (if Managed Identity configured)
     app.post('/api/settings', async (req, res) => {
         try {
             const body = req.body || {};
@@ -102,8 +130,29 @@ function createApp() {
                 return res.status(400).json({ error: 'No valid settings provided' });
             }
 
+            const azureConfigured = AzureManagementService.isConfigured();
+
+            // Always save to Cosmos DB
             await SettingsService.updateSettings(patch);
-            res.json({ ok: true });
+
+            if (azureConfigured) {
+                // Sync to Azure App Settings and restart
+                try {
+                    await AzureManagementService.updateAppSettings(patch, KNOWN_APP_SETTING_KEYS);
+                    await AzureManagementService.restart();
+                    return res.json({ ok: true, restarting: true });
+                } catch (azureErr) {
+                    console.error('Azure Management API error:', azureErr);
+                    return res.json({
+                        ok: true,
+                        restarting: false,
+                        warn: 'Saved to database, but failed to update Azure App Settings: ' + (azureErr.message || azureErr)
+                    });
+                }
+            }
+
+            // Azure Management not configured — DB-only save
+            res.json({ ok: true, restarting: false, warn: 'Saved to database only. Set AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP, AZURE_WEBAPP_NAME to enable Azure App Settings sync.' });
         } catch (err) {
             console.error('POST /api/settings error:', err);
             res.status(500).json({ error: 'Failed to save settings' });
@@ -113,6 +162,11 @@ function createApp() {
     // POST /api/chat — send a message to the AI (web user, shared AI_CHANNEL_ID history)
     app.post('/api/chat', async (req, res) => {
         try {
+            const ip = req.ip || req.socket.remoteAddress || 'unknown';
+            if (!chatRateLimit.check(ip)) {
+                return res.status(429).json({ error: 'Too many requests. Max 10 messages per minute.' });
+            }
+
             const message = String(req.body?.message || '').trim();
             if (!message) {
                 return res.status(400).json({ error: 'message is required' });

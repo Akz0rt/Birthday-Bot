@@ -26,5 +26,10 @@ module.exports = {
     // Admin web dashboard
     adminUser: process.env.ADMIN_USER || 'admin',
     adminPassword: process.env.ADMIN_PASSWORD || '',
-    port: parseInt(process.env.PORT || process.env.WEBSITES_PORT || '3000', 10)
+    port: parseInt(process.env.PORT || process.env.WEBSITES_PORT || '3000', 10),
+
+    // Azure Management API (for syncing App Settings — requires Managed Identity)
+    azureSubscriptionId: process.env.AZURE_SUBSCRIPTION_ID || '',
+    azureResourceGroup: process.env.AZURE_RESOURCE_GROUP || '',
+    azureWebAppName: process.env.AZURE_WEBAPP_NAME || ''
 };

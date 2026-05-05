@@ -386,6 +386,7 @@ async function loadSettings() {
 async function saveSettings() {
   const btn = document.getElementById('btn-save');
   btn.disabled = true;
+  showStatus('Сохранение…', 'warn');
 
   const patch = {};
   for (const [key, meta] of Object.entries(currentSettings)) {
@@ -400,8 +401,16 @@ async function saveSettings() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(patch)
     });
-    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
-    showStatus('✅ Изменения сохранены. Перезапустите бота для применения.', 'success');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+
+    if (data.restarting) {
+      showStatus('✅ Сохранено. Бот перезапускается (~10 сек)…', 'success');
+    } else if (data.warn) {
+      showStatus('⚠️ ' + data.warn, 'warn');
+    } else {
+      showStatus('✅ Сохранено в базе данных. Перезапустите бота для применения.', 'success');
+    }
   } catch (err) {
     showStatus('❌ ' + err.message, 'error');
   } finally {
