@@ -56,15 +56,6 @@ function buildSettingsResponse(dbOverrides) {
     return result;
 }
 
-// Known app setting keys we manage — used to reconstruct full Azure App Settings on update
-const KNOWN_APP_SETTING_KEYS = [
-    ...EDITABLE_SETTINGS,
-    'DISCORD_TOKEN', 'CLIENT_ID', 'GUILD_ID', 'COSMOS_ENDPOINT', 'COSMOS_KEY',
-    'COSMOS_DB_NAME', 'OPENAI_API_KEY', 'ADMIN_USER', 'ADMIN_PASSWORD',
-    'AZURE_SUBSCRIPTION_ID', 'AZURE_RESOURCE_GROUP', 'AZURE_WEBAPP_NAME',
-    'BIRTHDAY_CHANNEL_ID', 'CONGRATS_CHANNEL_ID'
-];
-
 // Simple in-memory rate limiter for /api/chat
 const chatRateLimit = {
     counts: new Map(),
@@ -138,7 +129,7 @@ function createApp() {
             if (azureConfigured) {
                 // Sync to Azure App Settings and restart
                 try {
-                    await AzureManagementService.updateAppSettings(patch, KNOWN_APP_SETTING_KEYS);
+                    await AzureManagementService.updateAppSettings(patch);
                     await AzureManagementService.restart();
                     return res.json({ ok: true, restarting: true });
                 } catch (azureErr) {

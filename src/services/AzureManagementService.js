@@ -28,23 +28,21 @@ class AzureManagementService {
 
     /**
      * Merges `patch` into Azure App Settings.
-     * Reconstructs the full settings object from process.env (already injected by Azure at
-     * startup) to avoid reading secrets over the Management API wire.
+     * Reads the current full App Settings from Azure first so that Azure-injected
+     * system variables (WEBSITE_RUN_FROM_PACKAGE, SCM_*, etc.) are preserved —
+     * updateApplicationSettings is a full replace, not a patch.
      * @param {Record<string, string>} patch
-     * @param {string[]} knownKeys  All setting keys managed by this app
      */
-    async updateAppSettings(patch, knownKeys) {
+    async updateAppSettings(patch) {
         const client = this._getClient();
 
-        // Build full settings from process.env — no Management API GET needed,
-        // secrets never travel over the wire.
-        const current = {};
-        for (const key of knownKeys) {
-            const val = process.env[key];
-            if (val !== undefined) current[key] = val;
-        }
+        // GET current settings to avoid wiping Azure system variables
+        const existing = await client.webApps.listApplicationSettings(
+            config.azureResourceGroup,
+            config.azureWebAppName
+        );
 
-        const merged = { ...current, ...patch };
+        const merged = { ...(existing.properties || {}), ...patch };
 
         await client.webApps.updateApplicationSettings(
             config.azureResourceGroup,
