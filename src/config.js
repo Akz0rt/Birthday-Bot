@@ -21,5 +21,10 @@ module.exports = {
     openaiKey: process.env.OPENAI_API_KEY,
     openaiModel: process.env.OPENAI_MODEL || 'gpt-4.1-mini',
     aiChannelId: process.env.AI_CHANNEL_ID,
-    aiMaxHistory: parseInt(process.env.AI_MAX_HISTORY || '20', 10)
+    aiMaxHistory: parseInt(process.env.AI_MAX_HISTORY || '20', 10),
+
+    // Admin web dashboard
+    adminUser: process.env.ADMIN_USER || 'admin',
+    adminPassword: process.env.ADMIN_PASSWORD || '',
+    port: parseInt(process.env.PORT || process.env.WEBSITES_PORT || '3000', 10)
 };

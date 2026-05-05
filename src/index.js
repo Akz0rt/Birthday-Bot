@@ -10,6 +10,8 @@ const config = require('./config');
 const SchedulerService = require('./services/SchedulerService');
 const NotificationService = require('./services/NotificationService');
 const AIService = require('./services/AIService');
+const state = require('./state');
+const { startServer } = require('./server');
 
 // Create a new client instance
 const client = new Client({
@@ -69,6 +71,10 @@ client.once(Events.ClientReady, async () => {
 
     // Always start scheduler so daily DB checks are not skipped
     SchedulerService.start();
+
+    // Expose guild to the web dashboard
+    state.guild = client.guilds.cache.first() || null;
+    state.client = client;
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -150,24 +156,8 @@ client.on(Events.MessageCreate, async message => {
     }
 });
 
-// Minimal HTTP server for health checks (helps Azure detect running app)
-const http = require('http');
-const PORT = process.env.PORT || 3000;
-
-const server = http.createServer((req, res) => {
-    if (req.url === '/health' || req.url === '/status') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok', uptime: process.uptime() }));
-        return;
-    }
-
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Birthday Bot is running');
-});
-
-server.listen(PORT, () => {
-    console.log(`Health server listening on port ${PORT}`);
-});
+// Start the admin web dashboard (also handles /health for Azure)
+startServer();
 
 // Global process error handlers to keep the container alive long enough for diagnostics
 process.on('unhandledRejection', (reason, promise) => {
