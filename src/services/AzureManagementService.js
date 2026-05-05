@@ -1,5 +1,3 @@
-const { WebSiteManagementClient } = require('@azure/arm-appservice');
-const { DefaultAzureCredential } = require('@azure/identity');
 const config = require('../config');
 
 class AzureManagementService {
@@ -20,6 +18,9 @@ class AzureManagementService {
 
     _getClient() {
         if (!this.client) {
+            // Lazy require — packages only needed when Azure sync is actually used
+            const { WebSiteManagementClient } = require('@azure/arm-appservice');
+            const { DefaultAzureCredential } = require('@azure/identity');
             const credential = new DefaultAzureCredential();
             this.client = new WebSiteManagementClient(credential, config.azureSubscriptionId);
         }
