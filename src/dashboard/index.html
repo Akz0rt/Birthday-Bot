@@ -593,6 +593,7 @@
     <button class="btn btn-secondary" onclick="loadSettings()">Сбросить</button>
     <span id="settings-status" class="status-msg"></span>
   </div>
+  <div id="banner-settings-section"></div>
   <div style="color:var(--text-muted);font-size:12px;max-width:680px;line-height:1.5">
     ℹ️ Изменения сохраняются в базу данных и применяются после перезапуска бота.
     Поля с меткой <span class="badge badge-secret">secret</span> доступны только для чтения.
@@ -647,6 +648,9 @@ async function loadSettings() {
   if (!res.ok) { showStatus('Ошибка загрузки настроек', 'error'); return; }
 
   currentSettings = await res.json();
+
+  await loadBannerSettingsFromServer();
+  renderBannerSettingsSection();
 
   grid.innerHTML = '';
   for (const [key, meta] of Object.entries(currentSettings)) {
@@ -962,10 +966,12 @@ function selectMode(mode, btn) {
   bannerMode = mode;
   persistBannerState();
   saveBannerSettingsToServer();
-  document.querySelectorAll('#mode-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  const periodOpts = document.getElementById('period-options');
-  if (periodOpts) periodOpts.style.display = mode === 'active' ? '' : 'none';
+  document.querySelectorAll('.js-mode-toggle .toggle-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  document.querySelectorAll('.js-period-options').forEach(el => {
+    el.style.display = mode === 'active' ? '' : 'none';
+  });
   if (mode === 'none') { featuredUser = null; updatePreview(); }
 }
 
@@ -973,8 +979,9 @@ function selectPeriod(period, btn) {
   bannerPeriod = period;
   persistBannerState();
   saveBannerSettingsToServer();
-  document.querySelectorAll('#period-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  document.querySelectorAll('.js-period-toggle .toggle-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.period === period);
+  });
 }
 
 async function refreshFeaturedUser() {
@@ -1026,14 +1033,14 @@ function renderServerEditor() {
     { m: 'birthday', label: '🎂 Именинники'      },
     { m: 'random',   label: '🎲 Случайно'        },
     { m: 'none',     label: '— Скрыть'           },
-  ].map(b => `<button class="toggle-btn${bannerMode === b.m ? ' active' : ''}" onclick="selectMode('${b.m}', this)">${b.label}</button>`).join('');
+  ].map(b => `<button class="toggle-btn${bannerMode === b.m ? ' active' : ''}" data-mode="${b.m}" onclick="selectMode('${b.m}', this)">${b.label}</button>`).join('');
 
   const periodBtns = [
     { p: 'hour',  label: 'Час'    },
     { p: 'day',   label: 'День'   },
     { p: 'week',  label: 'Неделя' },
     { p: 'month', label: 'Месяц'  },
-  ].map(b => `<button class="toggle-btn${bannerPeriod === b.p ? ' active' : ''}" onclick="selectPeriod('${b.p}', this)">${b.label}</button>`).join('');
+  ].map(b => `<button class="toggle-btn${bannerPeriod === b.p ? ' active' : ''}" data-period="${b.p}" onclick="selectPeriod('${b.p}', this)">${b.label}</button>`).join('');
 
   wrap.innerHTML = `
     <div class="server-editor-wrap">
@@ -1054,10 +1061,10 @@ function renderServerEditor() {
         </div>
         <div class="edit-field">
           <label>Баннер — пользователь на обложке</label>
-          <div class="toggle-group" id="mode-toggle">${modeBtns}</div>
-          <div id="period-options" style="margin-top:10px${bannerMode !== 'active' ? ';display:none' : ''}">
+          <div class="toggle-group js-mode-toggle" id="mode-toggle">${modeBtns}</div>
+          <div class="js-period-options" id="period-options" style="margin-top:10px${bannerMode !== 'active' ? ';display:none' : ''}">
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px">Период активности</div>
-            <div class="toggle-group" id="period-toggle">${periodBtns}</div>
+            <div class="toggle-group js-period-toggle" id="period-toggle">${periodBtns}</div>
           </div>
           <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <button class="btn btn-secondary" id="btn-refresh-user" onclick="refreshFeaturedUser()">🔄 Обновить пользователя</button>
@@ -1100,6 +1107,39 @@ function renderServerEditor() {
           <div id="preview-after">${buildServerCard(guildData, bannerMode !== 'none' ? featuredUser : null)}</div>
         </div>
       </div>
+    </div>`;
+}
+
+function renderBannerSettingsSection() {
+  const section = document.getElementById('banner-settings-section');
+  if (!section) return;
+
+  const modeBtns = [
+    { m: 'active',   label: '📊 Самый активный' },
+    { m: 'birthday', label: '🎂 Именинники'      },
+    { m: 'random',   label: '🎲 Случайно'        },
+    { m: 'none',     label: '— Скрыть'           },
+  ].map(b => `<button class="toggle-btn${bannerMode === b.m ? ' active' : ''}" data-mode="${b.m}" onclick="selectMode('${b.m}', this)">${b.label}</button>`).join('');
+
+  const periodBtns = [
+    { p: 'hour',  label: 'Час'    },
+    { p: 'day',   label: 'День'   },
+    { p: 'week',  label: 'Неделя' },
+    { p: 'month', label: 'Месяц'  },
+  ].map(b => `<button class="toggle-btn${bannerPeriod === b.p ? ' active' : ''}" data-period="${b.p}" onclick="selectPeriod('${b.p}', this)">${b.label}</button>`).join('');
+
+  section.innerHTML = `
+    <div style="border:1px solid var(--border);border-radius:var(--radius);padding:16px;display:flex;flex-direction:column;gap:14px;max-width:680px">
+      <div style="font-size:13px;font-weight:600;color:var(--text)">Настройки баннера сервера</div>
+      <div class="field" style="margin:0">
+        <label>BANNER_MODE — пользователь на обложке</label>
+        <div class="toggle-group js-mode-toggle">${modeBtns}</div>
+      </div>
+      <div class="field js-period-options" style="margin:0${bannerMode !== 'active' ? ';display:none' : ''}">
+        <label>ACTIVITY_PERIOD — период активности</label>
+        <div class="toggle-group js-period-toggle">${periodBtns}</div>
+      </div>
+      <div style="font-size:12px;color:var(--text-muted)">Изменения применяются мгновенно и сохраняются в базе данных.</div>
     </div>`;
 }
 
