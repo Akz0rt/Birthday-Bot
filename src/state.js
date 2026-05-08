@@ -6,10 +6,5 @@ module.exports = {
     /** @type {import('discord.js').Guild | null} */
     guild: null,
     /** @type {import('discord.js').Client | null} */
-    client: null,
-    /**
-     * Per-user message activity (in-memory, resets on restart).
-     * @type {Map<string, { displayName: string, avatarURL: string|null, timestamps: number[] }>}
-     */
-    messageActivity: new Map()
+    client: null
 };

@@ -10,7 +10,9 @@ const config = require('./config');
 const SchedulerService = require('./services/SchedulerService');
 const NotificationService = require('./services/NotificationService');
 const AIService = require('./services/AIService');
+const ActivityService = require('./services/ActivityService');
 const state = require('./state');
+const cron = require('node-cron');
 const { startServer } = require('./server');
 
 // Create a new client instance
@@ -72,6 +74,15 @@ client.once(Events.ClientReady, async () => {
     // Always start scheduler so daily DB checks are not skipped
     SchedulerService.start();
 
+    // Clean up old activity data (older than 30 days) — run daily at midnight UTC
+    cron.schedule('0 0 * * *', async () => {
+        try {
+            await ActivityService.cleanupOldData();
+        } catch (err) {
+            console.error('Activity cleanup error:', err.message);
+        }
+    });
+
     // Expose guild to the web dashboard
     state.guild = client.guilds.cache.first() || null;
     state.client = client;
@@ -105,19 +116,15 @@ client.on(Events.MessageCreate, async message => {
     if (message.author.bot) return;
     if (!message.guild) return;
 
-    // Track per-user message activity for featured-user banner stats
-    {
-        const entry = state.messageActivity.get(message.author.id)
-            || { displayName: '', avatarURL: null, timestamps: [] };
-        entry.displayName = message.member?.displayName || message.author.username;
-        entry.avatarURL = message.author.displayAvatarURL({ size: 128, extension: 'png' });
-        // Trim to last 30 days to avoid unbounded memory growth
-        if (entry.timestamps.length > 5000) {
-            const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
-            entry.timestamps = entry.timestamps.filter(t => t > cutoff);
-        }
-        entry.timestamps.push(Date.now());
-        state.messageActivity.set(message.author.id, entry);
+    // Track per-user message activity to Cosmos DB for featured-user banner stats
+    try {
+        await ActivityService.recordMessage(
+            message.author.id,
+            message.member?.displayName || message.author.username,
+            message.author.displayAvatarURL({ size: 128, extension: 'png' })
+        );
+    } catch (err) {
+        console.error('Failed to record message activity:', err.message);
     }
 
     const isAIChannel = message.channelId === config.aiChannelId;

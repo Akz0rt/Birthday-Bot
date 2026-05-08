@@ -5,6 +5,7 @@ const config = require('./config');
 const SettingsService = require('./services/SettingsService');
 const AzureManagementService = require('./services/AzureManagementService');
 const AIService = require('./services/AIService');
+const ActivityService = require('./services/ActivityService');
 const BirthdayService = require('./services/BirthdayService');
 const state = require('./state');
 
@@ -244,21 +245,15 @@ function createApp() {
             }
 
             if (resolvedMode === 'active') {
-                const periodMs = { day: 86400000, week: 604800000, month: 2592000000 }[resolvedPeriod] ?? 604800000;
+                const periodDays = { day: 1, week: 7, month: 30 }[resolvedPeriod] ?? 7;
                 const periodLabel = { day: 'день', week: 'неделю', month: 'месяц' }[resolvedPeriod] ?? 'неделю';
-                const cutoff = Date.now() - periodMs;
 
-                let topUser = null;
-                let topCount = 0;
-                for (const [, entry] of state.messageActivity) {
-                    const count = entry.timestamps.filter(t => t > cutoff).length;
-                    if (count > topCount) { topCount = count; topUser = entry; }
-                }
-
-                if (!topUser || topCount === 0) {
+                const topUsers = await ActivityService.getTopUsersByPeriod(periodDays);
+                if (!topUsers || topUsers.length === 0) {
                     return res.json({ found: false, reason: 'no_activity' });
                 }
 
+                const topUser = topUsers[0];
                 return res.json({
                     found: true,
                     resolvedMode,
@@ -266,7 +261,7 @@ function createApp() {
                     user: {
                         displayName: topUser.displayName,
                         avatarURL: topUser.avatarURL,
-                        stat: `💬 ${topCount} сообщений за ${periodLabel}`
+                        stat: `💬 ${topUser.totalMessages} сообщений за ${periodLabel}`
                     }
                 });
             }
