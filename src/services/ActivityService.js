@@ -145,15 +145,12 @@ class ActivityService {
 
     /**
      * Get top active users for a period
-     * @param {number} days - Number of days to look back
+     * @param {number|string} periodOrDays - Number of days or period key: day|week|month
      * @returns {Array} Array of { userId, displayName, avatarURL, messageCount }
      */
-    async getTopUsersByPeriod(days = 7) {
+    async getTopUsersByPeriod(periodOrDays = 'week') {
         await this.initialize();
-
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - days);
-        const cutoffString = cutoffDate.toISOString().split('T')[0];
+        const cutoffString = this._getCutoffDateString(periodOrDays);
 
         try {
             const query = `
@@ -174,6 +171,31 @@ class ActivityService {
             console.error('ActivityService.getTopUsersByPeriod error:', error?.message || error);
             throw error;
         }
+    }
+
+    _getCutoffDateString(periodOrDays) {
+        const now = new Date();
+
+        if (typeof periodOrDays === 'number' && Number.isFinite(periodOrDays)) {
+            const cutoff = new Date(now);
+            cutoff.setDate(cutoff.getDate() - periodOrDays);
+            return cutoff.toISOString().split('T')[0];
+        }
+
+        const period = String(periodOrDays || 'week');
+        const cutoff = new Date(now);
+
+        if (period === 'day') {
+            cutoff.setDate(cutoff.getDate() - 1);
+        } else if (period === 'week') {
+            cutoff.setDate(cutoff.getDate() - 7);
+        } else if (period === 'month') {
+            cutoff.setMonth(cutoff.getMonth() - 1);
+        } else {
+            cutoff.setDate(cutoff.getDate() - 7);
+        }
+
+        return cutoff.toISOString().split('T')[0];
     }
 
     /**
@@ -270,12 +292,16 @@ class ActivityService {
             .sort((a, b) => b.totalMessages - a.totalMessages);
     }
 
-    async getPeriodDebugStats(days = 7) {
+    async getPeriodDebugStats(periodOrDays = 'week') {
         await this.initialize();
+        const cutoffString = this._getCutoffDateString(periodOrDays);
 
-        const cutoffDate = new Date();
-        cutoffDate.setDate(cutoffDate.getDate() - days);
-        const cutoffString = cutoffDate.toISOString().split('T')[0];
+        let resolvedDays = null;
+        if (typeof periodOrDays === 'number' && Number.isFinite(periodOrDays)) {
+            resolvedDays = periodOrDays;
+        } else {
+            resolvedDays = { day: 1, week: 7, month: 30 }[String(periodOrDays)] ?? 7;
+        }
 
         const activityQuery = `
             SELECT c.userId, c.messageCount
@@ -307,7 +333,7 @@ class ActivityService {
         }
 
         return {
-            days,
+            days: resolvedDays,
             cutoffDate: cutoffString,
             activityDocs: activityRows.length,
             dedupDocs: dedupRows.length,

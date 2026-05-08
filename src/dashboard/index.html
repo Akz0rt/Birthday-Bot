@@ -786,14 +786,62 @@ function escAttr(str) {
 
 /* ─── Server card ─── */
 let guildData    = null;
-let bannerMode   = 'active';  // 'active' | 'birthday' | 'random' | 'none'
-let bannerPeriod = 'week';    // 'day' | 'week' | 'month'
+let bannerMode   = loadBannerMode();    // 'active' | 'birthday' | 'random' | 'none'
+let bannerPeriod = loadBannerPeriod();  // 'hour' | 'day' | 'week' | 'month'
 let featuredUser = null;      // { displayName, avatarURL, stat } | null
+
+function loadBannerMode() {
+  const saved = localStorage.getItem('bb_banner_mode');
+  return ['active', 'birthday', 'random', 'none'].includes(saved) ? saved : 'active';
+}
+
+function loadBannerPeriod() {
+  const saved = localStorage.getItem('bb_banner_period');
+  return ['hour', 'day', 'week', 'month'].includes(saved) ? saved : 'week';
+}
+
+function persistBannerState() {
+  localStorage.setItem('bb_banner_mode', bannerMode);
+  localStorage.setItem('bb_banner_period', bannerPeriod);
+}
+
+async function loadBannerSettingsFromServer() {
+  try {
+    const res = await fetch('/api/server-banner-settings');
+    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+    const data = await res.json();
+
+    if (['active', 'birthday', 'random', 'none'].includes(data.mode)) {
+      bannerMode = data.mode;
+    }
+    if (['hour', 'day', 'week', 'month'].includes(data.period)) {
+      bannerPeriod = data.period;
+    }
+
+    persistBannerState();
+  } catch (err) {
+    // Keep localStorage fallback silently; server settings might not exist yet.
+    console.warn('Failed to load banner settings from server:', err.message || err);
+  }
+}
+
+async function saveBannerSettingsToServer() {
+  try {
+    await fetch('/api/server-banner-settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: bannerMode, period: bannerPeriod })
+    });
+  } catch (err) {
+    console.warn('Failed to save banner settings to server:', err.message || err);
+  }
+}
 
 async function loadGuildInfo() {
   const wrap = document.getElementById('server-card-wrap');
   wrap.innerHTML = '<div style="color:var(--text-muted);padding:24px;text-align:center">Загрузка…</div>';
   try {
+    await loadBannerSettingsFromServer();
     const res = await fetch('/api/guild-info');
     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
     guildData = await res.json();
@@ -912,6 +960,8 @@ function handleFileInput(input, type) {
 
 function selectMode(mode, btn) {
   bannerMode = mode;
+  persistBannerState();
+  saveBannerSettingsToServer();
   document.querySelectorAll('#mode-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const periodOpts = document.getElementById('period-options');
@@ -921,6 +971,8 @@ function selectMode(mode, btn) {
 
 function selectPeriod(period, btn) {
   bannerPeriod = period;
+  persistBannerState();
+  saveBannerSettingsToServer();
   document.querySelectorAll('#period-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
 }

@@ -10,6 +10,11 @@ const ActivitySyncService = require('./services/ActivitySyncService');
 const BirthdayService = require('./services/BirthdayService');
 const state = require('./state');
 
+const BANNER_MODE_KEY = 'BANNER_MODE';
+const ACTIVITY_PERIOD_KEY = 'ACTIVITY_PERIOD';
+const VALID_BANNER_MODES = new Set(['active', 'birthday', 'random', 'none']);
+const VALID_ACTIVITY_PERIODS = new Set(['hour', 'day', 'week', 'month']);
+
 // Names of settings that can be edited via the panel (secrets are read-only)
 const EDITABLE_SETTINGS = [
     'CHECK_TIME',
@@ -204,6 +209,57 @@ function createApp() {
         }
     });
 
+    // GET /api/server-banner-settings — persisted banner mode/activity period from settings table
+    app.get('/api/server-banner-settings', async (req, res) => {
+        try {
+            const settings = await SettingsService.getSettings();
+            const mode = VALID_BANNER_MODES.has(settings[BANNER_MODE_KEY]) ? settings[BANNER_MODE_KEY] : 'active';
+            const period = VALID_ACTIVITY_PERIODS.has(settings[ACTIVITY_PERIOD_KEY]) ? settings[ACTIVITY_PERIOD_KEY] : 'week';
+            res.json({ mode, period });
+        } catch (err) {
+            console.error('GET /api/server-banner-settings error:', err);
+            res.status(500).json({ error: 'Failed to load server banner settings' });
+        }
+    });
+
+    // POST /api/server-banner-settings — persist banner mode/activity period to settings table
+    app.post('/api/server-banner-settings', async (req, res) => {
+        try {
+            const body = req.body || {};
+            const patch = {};
+
+            if (Object.prototype.hasOwnProperty.call(body, 'mode')) {
+                const mode = String(body.mode || '').trim();
+                if (!VALID_BANNER_MODES.has(mode)) {
+                    return res.status(400).json({ error: 'Invalid mode' });
+                }
+                patch[BANNER_MODE_KEY] = mode;
+            }
+
+            if (Object.prototype.hasOwnProperty.call(body, 'period')) {
+                const period = String(body.period || '').trim();
+                if (!VALID_ACTIVITY_PERIODS.has(period)) {
+                    return res.status(400).json({ error: 'Invalid period' });
+                }
+                patch[ACTIVITY_PERIOD_KEY] = period;
+            }
+
+            if (Object.keys(patch).length === 0) {
+                return res.status(400).json({ error: 'No valid banner settings provided' });
+            }
+
+            await SettingsService.updateSettings(patch);
+
+            const settings = await SettingsService.getSettings();
+            const mode = VALID_BANNER_MODES.has(settings[BANNER_MODE_KEY]) ? settings[BANNER_MODE_KEY] : 'active';
+            const period = VALID_ACTIVITY_PERIODS.has(settings[ACTIVITY_PERIOD_KEY]) ? settings[ACTIVITY_PERIOD_KEY] : 'week';
+            res.json({ ok: true, mode, period });
+        } catch (err) {
+            console.error('POST /api/server-banner-settings error:', err);
+            res.status(500).json({ error: 'Failed to save server banner settings' });
+        }
+    });
+
     // GET /api/featured-user — returns the highlighted user for the server banner overlay
     app.get('/api/featured-user', async (req, res) => {
         if (!state.guild) {
@@ -246,7 +302,6 @@ function createApp() {
             }
 
             if (resolvedMode === 'active') {
-                const periodDays = { day: 1, week: 7, month: 30 }[resolvedPeriod] ?? 7;
                 const periodLabel = { hour: 'час', day: 'день', week: 'неделю', month: 'месяц' }[resolvedPeriod] ?? 'неделю';
                 const syncIntervalMs = {
                     hour: 30 * 60 * 1000,
@@ -271,9 +326,9 @@ function createApp() {
 
                 const topUsers = resolvedPeriod === 'hour'
                     ? await ActivityService.getTopUsersByRecentWindow(60 * 60 * 1000)
-                    : await ActivityService.getTopUsersByPeriod(periodDays);
+                    : await ActivityService.getTopUsersByPeriod(resolvedPeriod);
                 if (!topUsers || topUsers.length === 0) {
-                    const debug = await ActivityService.getPeriodDebugStats(periodDays);
+                    const debug = await ActivityService.getPeriodDebugStats(resolvedPeriod);
                     console.warn('featured-user no_activity debug:', { period: resolvedPeriod, ...debug });
                     return res.json({ found: false, reason: 'no_activity', debug });
                 }
@@ -324,8 +379,7 @@ function createApp() {
     app.get('/api/activity-debug', async (req, res) => {
         try {
             const period = String(req.query.period || 'week');
-            const days = { day: 1, week: 7, month: 30 }[period] ?? 7;
-            const debug = await ActivityService.getPeriodDebugStats(days);
+            const debug = await ActivityService.getPeriodDebugStats(period);
             res.json({ period, ...debug });
         } catch (err) {
             console.error('GET /api/activity-debug error:', err);
