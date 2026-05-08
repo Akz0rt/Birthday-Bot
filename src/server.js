@@ -254,7 +254,17 @@ function createApp() {
                     return res.json({ found: false, reason: 'no_activity' });
                 }
 
-                const topUser = topUsers[0];
+                const topUser = { ...topUsers[0] };
+                if ((!topUser.displayName || !topUser.avatarURL) && topUser.userId && state.guild) {
+                    try {
+                        const member = await state.guild.members.fetch(topUser.userId);
+                        topUser.displayName = topUser.displayName || member.displayName;
+                        topUser.avatarURL = topUser.avatarURL || member.user.displayAvatarURL({ size: 128, extension: 'png' });
+                    } catch {
+                        topUser.displayName = topUser.displayName || `User ${topUser.userId}`;
+                    }
+                }
+
                 return res.json({
                     found: true,
                     resolvedMode,

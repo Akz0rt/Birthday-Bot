@@ -169,7 +169,11 @@ class ActivityService {
                 .query(query, { parameters: [{ name: '@cutoffDate', value: cutoffString }] })
                 .fetchAll();
 
-            return resources;
+            if (resources && resources.length > 0) {
+                return resources;
+            }
+
+            return this._getTopUsersFromDedup(cutoffString);
         } catch (error) {
             console.warn('ActivityService.getTopUsersByPeriod aggregate query failed, fallback to JS aggregation:', error?.message || error);
 
@@ -205,8 +209,43 @@ class ActivityService {
                 }
             }
 
-            return Array.from(byUser.values()).sort((a, b) => b.totalMessages - a.totalMessages);
+            const aggregated = Array.from(byUser.values()).sort((a, b) => b.totalMessages - a.totalMessages);
+            if (aggregated.length > 0) {
+                return aggregated;
+            }
+
+            return this._getTopUsersFromDedup(cutoffString);
         }
+    }
+
+    async _getTopUsersFromDedup(cutoffString) {
+        const dedupQuery = `
+            SELECT c.userId
+            FROM c
+            WHERE c.date >= @cutoffDate
+        `;
+
+        const { resources } = await this.messagesContainer.items
+            .query(dedupQuery, { parameters: [{ name: '@cutoffDate', value: cutoffString }] })
+            .fetchAll();
+
+        if (!resources || resources.length === 0) {
+            return [];
+        }
+
+        const byUser = new Map();
+        for (const row of resources) {
+            byUser.set(row.userId, (byUser.get(row.userId) || 0) + 1);
+        }
+
+        return Array.from(byUser.entries())
+            .map(([userId, totalMessages]) => ({
+                userId,
+                displayName: null,
+                avatarURL: null,
+                totalMessages
+            }))
+            .sort((a, b) => b.totalMessages - a.totalMessages);
     }
 
     /**
