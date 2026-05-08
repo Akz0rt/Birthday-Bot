@@ -798,9 +798,42 @@ async function loadGuildInfo() {
     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
     guildData = await res.json();
     renderServerEditor();
+    loadSyncStatus();
     if (bannerMode !== 'none') refreshFeaturedUser();
   } catch (err) {
     wrap.innerHTML = `<div style="color:var(--error);padding:24px">${escHtml(err.message)}</div>`;
+  }
+}
+
+async function loadSyncStatus() {
+  const el = document.getElementById('activity-sync-status');
+  if (!el) return;
+
+  try {
+    const res = await fetch('/api/activity-sync-status');
+    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+
+    const data = await res.json();
+    if (data.isRunning) {
+      el.textContent = '⏳ Синхронизация активности выполняется…';
+      el.style.color = 'var(--warn)';
+      return;
+    }
+
+    if (!data.lastSuccessAt) {
+      el.textContent = '⌛ Ожидается первая успешная синхронизация';
+      el.style.color = 'var(--text-muted)';
+      return;
+    }
+
+    const dt = new Date(data.lastSuccessAt);
+    const hh = String(dt.getUTCHours()).padStart(2, '0');
+    const mm = String(dt.getUTCMinutes()).padStart(2, '0');
+    el.textContent = `✅ Синхронизировано до ${hh}:${mm} UTC`;
+    el.style.color = 'var(--success)';
+  } catch (err) {
+    el.textContent = `⚠️ ${err.message}`;
+    el.style.color = 'var(--warn)';
   }
 }
 
@@ -906,7 +939,7 @@ async function refreshFeaturedUser() {
     if (!data.found) {
       const reasons = {
         no_birthdays:     'Сегодня нет именинников',
-        no_activity:      'Нет данных активности (бот собирает статистику с момента запуска)',
+        no_activity:      'Нет данных активности за выбранный период (история синхронизируется каждые 5 минут)',
         member_not_found: 'Пользователь не найден на сервере'
       };
       featuredUser = null;
@@ -922,6 +955,7 @@ async function refreshFeaturedUser() {
     if (status) { status.textContent = '❌ ' + err.message; status.style.color = 'var(--error)'; }
   } finally {
     if (btn) btn.disabled = false;
+    loadSyncStatus();
   }
 }
 
@@ -969,6 +1003,7 @@ function renderServerEditor() {
             <button class="btn btn-secondary" id="btn-refresh-user" onclick="refreshFeaturedUser()">🔄 Обновить пользователя</button>
             <span id="featured-user-status" style="font-size:12px"></span>
           </div>
+          <div id="activity-sync-status" style="margin-top:8px;font-size:12px;color:var(--text-muted)">Проверка статуса синхронизации…</div>
         </div>
         <div class="edit-field">
           <label>Аватарка сервера</label>

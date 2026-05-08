@@ -6,6 +6,7 @@ const SettingsService = require('./services/SettingsService');
 const AzureManagementService = require('./services/AzureManagementService');
 const AIService = require('./services/AIService');
 const ActivityService = require('./services/ActivityService');
+const ActivitySyncService = require('./services/ActivitySyncService');
 const BirthdayService = require('./services/BirthdayService');
 const state = require('./state');
 
@@ -270,6 +271,17 @@ function createApp() {
         } catch (err) {
             console.error('GET /api/featured-user error:', err);
             res.status(500).json({ error: 'Failed to fetch featured user' });
+        }
+    });
+
+    // GET /api/activity-sync-status — sync health and freshness
+    app.get('/api/activity-sync-status', async (req, res) => {
+        try {
+            const status = await ActivitySyncService.getStatus();
+            res.json(status);
+        } catch (err) {
+            console.error('GET /api/activity-sync-status error:', err);
+            res.status(500).json({ error: 'Failed to fetch activity sync status' });
         }
     });
 

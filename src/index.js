@@ -11,6 +11,7 @@ const SchedulerService = require('./services/SchedulerService');
 const NotificationService = require('./services/NotificationService');
 const AIService = require('./services/AIService');
 const ActivityService = require('./services/ActivityService');
+const ActivitySyncService = require('./services/ActivitySyncService');
 const state = require('./state');
 const cron = require('node-cron');
 const { startServer } = require('./server');
@@ -71,8 +72,36 @@ client.once(Events.ClientReady, async () => {
         console.error('No notification channels found. Birthday checks will still run, but messages cannot be sent.');
     }
 
+    // Expose guild to the web dashboard and sync services
+    state.guild = client.guilds.cache.first() || null;
+    state.client = client;
+
     // Always start scheduler so daily DB checks are not skipped
     SchedulerService.start();
+
+    // Run activity sync immediately after startup
+    if (state.guild) {
+        try {
+            const startupSync = await ActivitySyncService.run(state.guild, 'startup');
+            console.log('Activity sync (startup):', startupSync);
+        } catch (err) {
+            console.error('Activity startup sync error:', err.message || err);
+        }
+    }
+
+    // Periodic activity sync from Discord message history
+    const interval = Math.max(1, Math.min(59, config.activitySyncIntervalMinutes || 5));
+    cron.schedule(`*/${interval} * * * *`, async () => {
+        if (!state.guild) return;
+        try {
+            const periodicSync = await ActivitySyncService.run(state.guild, 'scheduled');
+            if (!periodicSync.skipped) {
+                console.log('Activity sync (scheduled):', periodicSync);
+            }
+        } catch (err) {
+            console.error('Activity scheduled sync error:', err.message || err);
+        }
+    });
 
     // Clean up old activity data (older than 30 days) — run daily at midnight UTC
     cron.schedule('0 0 * * *', async () => {
@@ -83,9 +112,6 @@ client.once(Events.ClientReady, async () => {
         }
     });
 
-    // Expose guild to the web dashboard
-    state.guild = client.guilds.cache.first() || null;
-    state.client = client;
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -115,24 +141,6 @@ client.on(Events.InteractionCreate, async interaction => {
 client.on(Events.MessageCreate, async message => {
     if (message.author.bot) return;
     if (!message.guild) return;
-
-    // Track per-user message activity to Cosmos DB for featured-user banner stats
-    try {
-        await ActivityService.recordMessage(
-            message.author.id,
-            message.member?.displayName || message.author.username,
-            message.author.displayAvatarURL({ size: 128, extension: 'png' })
-        );
-    } catch (err) {
-        console.error('Failed to record message activity:', {
-            error: err?.message || err,
-            code: err?.code,
-            statusCode: err?.statusCode,
-            guildId: message.guild?.id,
-            channelId: message.channelId,
-            userId: message.author?.id
-        });
-    }
 
     const isAIChannel = message.channelId === config.aiChannelId;
     const isMentioned = message.mentions.has(client.user);

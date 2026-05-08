@@ -2,11 +2,13 @@ const { CosmosClient } = require('@azure/cosmos');
 const config = require('../config');
 
 const ACTIVITY_CONTAINER = 'activity';
+const ACTIVITY_MESSAGES_CONTAINER = 'activity_messages';
 
 class ActivityService {
     constructor() {
         this.client = null;
         this.container = null;
+        this.messagesContainer = null;
         this.initialized = false;
     }
 
@@ -26,7 +28,13 @@ class ActivityService {
             partitionKey: { paths: ['/userId'] }
         });
 
+        await database.containers.createIfNotExists({
+            id: ACTIVITY_MESSAGES_CONTAINER,
+            partitionKey: { paths: ['/channelId'] }
+        });
+
         this.container = database.container(ACTIVITY_CONTAINER);
+        this.messagesContainer = database.container(ACTIVITY_MESSAGES_CONTAINER);
         this.initialized = true;
     }
 
@@ -37,44 +45,101 @@ class ActivityService {
      * @param {string} avatarURL - User avatar URL
      */
     async recordMessage(userId, displayName, avatarURL) {
+        return this.recordMessageById({
+            userId,
+            displayName,
+            avatarURL,
+            timestamp: Date.now()
+        });
+    }
+
+    /**
+     * Record activity for a message id. Returns false when the same message was already counted.
+     * @param {{ userId: string, displayName: string, avatarURL: string|null, messageId?: string, channelId?: string, timestamp?: number }} params
+     * @returns {Promise<boolean>}
+     */
+    async recordMessageById(params) {
         await this.initialize();
 
-        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-        const docId = `${userId}-${today}`;
+        const timestamp = params.timestamp || Date.now();
+        const date = new Date(timestamp).toISOString().split('T')[0];
+        const docId = `${params.userId}-${date}`;
+
+        if (params.messageId && params.channelId) {
+            const dedupInserted = await this._insertDedupMessage({
+                channelId: params.channelId,
+                messageId: params.messageId,
+                userId: params.userId,
+                date
+            });
+
+            if (!dedupInserted) {
+                return false;
+            }
+        }
 
         try {
-            const { resource } = await this.container
-                .item(docId, userId)
-                .read();
+            const { resource } = await this.container.item(docId, params.userId).read();
+            const base = resource || {
+                id: docId,
+                userId: params.userId,
+                date,
+                displayName: params.displayName,
+                avatarURL: params.avatarURL,
+                messageCount: 0,
+                lastMessageTime: timestamp
+            };
 
-            // Update existing record
-            resource.messageCount = (resource.messageCount || 0) + 1;
-            resource.lastMessageTime = Date.now();
-            resource.displayName = displayName;
-            resource.avatarURL = avatarURL;
-            delete resource._rid;
-            delete resource._self;
-            delete resource._etag;
-            delete resource._attachments;
-            delete resource._ts;
-            await this.container.items.upsert(resource);
+            base.messageCount = (base.messageCount || 0) + 1;
+            base.lastMessageTime = timestamp;
+            base.displayName = params.displayName;
+            base.avatarURL = params.avatarURL;
+
+            delete base._rid;
+            delete base._self;
+            delete base._etag;
+            delete base._attachments;
+            delete base._ts;
+
+            await this.container.items.upsert(base);
+            return true;
         } catch (error) {
             if (error.code === 404) {
-                // Create new record
                 const newRecord = {
                     id: docId,
-                    userId,
-                    date: today,
-                    displayName,
-                    avatarURL,
+                    userId: params.userId,
+                    date,
+                    displayName: params.displayName,
+                    avatarURL: params.avatarURL,
                     messageCount: 1,
-                    lastMessageTime: Date.now()
+                    lastMessageTime: timestamp
                 };
+
                 await this.container.items.create(newRecord);
-            } else {
-                console.error('ActivityService.recordMessage error:', error);
-                throw error;
+                return true;
             }
+
+            console.error('ActivityService.recordMessageById error:', error);
+            throw error;
+        }
+    }
+
+    async _insertDedupMessage({ channelId, messageId, userId, date }) {
+        try {
+            await this.messagesContainer.items.create({
+                id: `${channelId}-${messageId}`,
+                channelId,
+                messageId,
+                userId,
+                date,
+                createdAt: Date.now()
+            });
+            return true;
+        } catch (error) {
+            if (error.code === 409) {
+                return false;
+            }
+            throw error;
         }
     }
 
@@ -132,7 +197,16 @@ class ActivityService {
                 await this.container.item(doc.id, doc.userId).delete();
             }
 
-            console.log(`ActivityService: cleaned up ${resources.length} old activity records`);
+            const dedupQuery = `SELECT c.id, c.channelId FROM c WHERE c.date < @cutoffDate`;
+            const { resources: dedupResources } = await this.messagesContainer.items
+                .query(dedupQuery, { parameters: [{ name: '@cutoffDate', value: cutoffString }] })
+                .fetchAll();
+
+            for (const doc of dedupResources) {
+                await this.messagesContainer.item(doc.id, doc.channelId).delete();
+            }
+
+            console.log(`ActivityService: cleaned up ${resources.length} activity and ${dedupResources.length} dedup records`);
         } catch (error) {
             console.error('ActivityService.cleanupOldData error:', error);
             // Don't throw - cleanup is not critical

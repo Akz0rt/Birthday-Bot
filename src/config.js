@@ -28,6 +28,12 @@ module.exports = {
     adminPassword: process.env.ADMIN_PASSWORD || '',
     port: parseInt(process.env.PORT || process.env.WEBSITES_PORT || '3000', 10),
 
+    // Activity sync
+    activitySyncIntervalMinutes: parseInt(process.env.ACTIVITY_SYNC_INTERVAL_MINUTES || '5', 10),
+    activityBackfillDays: parseInt(process.env.ACTIVITY_BACKFILL_DAYS || '30', 10),
+    activityBackfillPagesPerRun: parseInt(process.env.ACTIVITY_BACKFILL_PAGES_PER_RUN || '20', 10),
+    activityIncrementalPagesPerRun: parseInt(process.env.ACTIVITY_INCREMENTAL_PAGES_PER_RUN || '10', 10),
+
     // Azure Management API (for syncing App Settings — requires Managed Identity)
     azureSubscriptionId: process.env.AZURE_SUBSCRIPTION_ID || '',
     azureResourceGroup: process.env.AZURE_RESOURCE_GROUP || '',
