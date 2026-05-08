@@ -158,6 +158,49 @@ function createApp() {
         }
     });
 
+    // GET /api/guild-info — server "business card": name, icon, banner, invite link
+    app.get('/api/guild-info', async (req, res) => {
+        if (!state.guild) {
+            return res.status(503).json({ error: 'Bot is not connected to Discord yet. Please wait.' });
+        }
+
+        try {
+            const guild = state.guild;
+            await guild.fetch();
+
+            const iconUrl = guild.iconURL({ extension: 'png', forceStatic: false, size: 256 }) || null;
+            const bannerUrl = guild.bannerURL({ extension: 'gif', forceStatic: false, size: 1024 })
+                || guild.bannerURL({ extension: 'png', forceStatic: false, size: 1024 })
+                || null;
+
+            let inviteUrl = null;
+            if (guild.vanityURLCode) {
+                inviteUrl = `https://discord.gg/${guild.vanityURLCode}`;
+            } else {
+                try {
+                    const invites = await guild.invites.fetch();
+                    const first = invites.first();
+                    if (first) inviteUrl = `https://discord.gg/${first.code}`;
+                } catch {
+                    // No permission to read invites — leave null
+                }
+            }
+
+            res.json({
+                name: guild.name,
+                iconUrl,
+                bannerUrl,
+                inviteUrl,
+                memberCount: guild.memberCount,
+                boostLevel: guild.premiumTier,
+                boostCount: guild.premiumSubscriptionCount || 0
+            });
+        } catch (err) {
+            console.error('GET /api/guild-info error:', err);
+            res.status(500).json({ error: 'Failed to fetch guild info' });
+        }
+    });
+
     // POST /api/chat — send a message to the AI (web user, shared AI_CHANNEL_ID history)
     app.post('/api/chat', async (req, res) => {
         try {

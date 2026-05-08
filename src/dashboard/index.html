@@ -287,6 +287,129 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── Server card ── */
+  .server-card {
+    max-width: 480px;
+    width: 100%;
+    margin: 0 auto;
+    border-radius: 16px;
+    overflow: hidden;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  .server-banner {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    display: block;
+    background: var(--surface2);
+  }
+
+  .server-banner-placeholder {
+    width: 100%;
+    height: 180px;
+    background: linear-gradient(135deg, #1e1b3a 0%, #2e2a52 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+  }
+
+  .server-body { padding: 0 20px 24px; }
+
+  .server-icon-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 14px;
+    margin-top: -32px;
+    margin-bottom: 12px;
+  }
+
+  .server-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 4px solid var(--surface);
+    object-fit: cover;
+    background: var(--surface2);
+    flex-shrink: 0;
+  }
+
+  .server-icon-placeholder {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 4px solid var(--surface);
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 28px;
+    flex-shrink: 0;
+  }
+
+  .server-name { font-size: 20px; font-weight: 700; line-height: 1.2; margin-bottom: 2px; }
+
+  .server-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .server-pill {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .pill-accent { color: var(--accent); }
+
+  .invite-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .invite-block a {
+    color: var(--accent);
+    text-decoration: none;
+    font-family: 'Cascadia Code', 'Fira Code', monospace;
+    font-size: 13px;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .invite-block a:hover { text-decoration: underline; }
+
+  .invite-copy {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    padding: 4px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    transition: border-color .15s, color .15s;
+    white-space: nowrap;
+  }
+
+  .invite-copy:hover { border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -301,6 +424,7 @@
 
 <div class="tabs">
   <button class="tab-btn active" data-tab="settings">⚙️ Настройки</button>
+  <button class="tab-btn" data-tab="server">🏠 Сервер</button>
   <button class="tab-btn" data-tab="chat">💬 AI Чат</button>
 </div>
 
@@ -318,6 +442,16 @@
     ℹ️ Изменения сохраняются в базу данных и применяются после перезапуска бота.
     Поля с меткой <span class="badge badge-secret">secret</span> доступны только для чтения.
     Поля с меткой <span class="badge badge-readonly">readonly</span> задаются только через Azure App Settings.
+  </div>
+</div>
+
+<!-- ═══════ SERVER TAB ═══════ -->
+<div id="tab-server" class="tab-pane">
+  <div style="display:flex;justify-content:center;margin-bottom:12px">
+    <button class="btn btn-secondary" onclick="loadGuildInfo()">🔄 Обновить</button>
+  </div>
+  <div id="server-card-wrap" style="display:flex;justify-content:center;padding-top:8px">
+    <div style="color:var(--text-muted);padding:24px">Загрузка…</div>
   </div>
 </div>
 
@@ -495,8 +629,71 @@ function escAttr(str) {
   return String(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+/* ─── Server card ─── */
+async function loadGuildInfo() {
+  const wrap = document.getElementById('server-card-wrap');
+  try {
+    const res = await fetch('/api/guild-info');
+    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+    const g = await res.json();
+
+    const boostLabels = ['Нет', 'Уровень 1', 'Уровень 2', 'Уровень 3'];
+
+    const banner = g.bannerUrl
+      ? `<img class="server-banner" src="${escAttr(g.bannerUrl)}" alt="banner">`
+      : `<div class="server-banner-placeholder">🎂</div>`;
+
+    const icon = g.iconUrl
+      ? `<img class="server-icon" src="${escAttr(g.iconUrl)}" alt="icon">`
+      : `<div class="server-icon-placeholder">🏠</div>`;
+
+    const invite = g.inviteUrl
+      ? `<div class="invite-block">
+           <a href="${escAttr(g.inviteUrl)}" target="_blank" rel="noopener">${escHtml(g.inviteUrl)}</a>
+           <button class="invite-copy" onclick="copyInvite('${escAttr(g.inviteUrl)}', this)">Копировать</button>
+         </div>`
+      : `<div style="color:var(--text-muted);font-size:13px">Ссылка-приглашение не найдена</div>`;
+
+    wrap.innerHTML = `
+      <div class="server-card">
+        ${banner}
+        <div class="server-body">
+          <div class="server-icon-row">
+            ${icon}
+            <div class="server-name">${escHtml(g.name)}</div>
+          </div>
+          <div class="server-meta">
+            <div class="server-pill">👥 <span class="pill-accent">${g.memberCount}</span> участников</div>
+            <div class="server-pill">✨ <span class="pill-accent">${boostLabels[g.boostLevel] || 'Уровень ' + g.boostLevel}</span></div>
+            <div class="server-pill">🚀 <span class="pill-accent">${g.boostCount}</span> бустов</div>
+          </div>
+          ${invite}
+        </div>
+      </div>`;
+  } catch (err) {
+    wrap.innerHTML = `<div style="color:var(--error);padding:24px">${escHtml(err.message)}</div>`;
+  }
+}
+
+function copyInvite(url, btn) {
+  navigator.clipboard.writeText(url).then(() => {
+    btn.textContent = 'Скопировано!';
+    setTimeout(() => { btn.textContent = 'Копировать'; }, 2000);
+  });
+}
+
 /* ─── Init ─── */
 loadSettings();
+
+// Load server info when that tab is first opened
+let serverLoaded = false;
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  if (btn.dataset.tab === 'server') {
+    btn.addEventListener('click', () => {
+      if (!serverLoaded) { serverLoaded = true; loadGuildInfo(); }
+    });
+  }
+});
 </script>
 </body>
 </html>
