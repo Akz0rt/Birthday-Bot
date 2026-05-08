@@ -939,11 +939,18 @@ async function refreshFeaturedUser() {
     if (!data.found) {
       const reasons = {
         no_birthdays:     'Сегодня нет именинников',
-        no_activity:      'Нет данных активности за выбранный период (история синхронизируется каждые 5 минут)',
+        no_activity:      'Нет данных активности за выбранный период',
         member_not_found: 'Пользователь не найден на сервере'
       };
       featuredUser = null;
-      if (status) { status.textContent = reasons[data.reason] || 'Не найдено'; status.style.color = 'var(--warn)'; }
+      if (status) {
+        let text = reasons[data.reason] || 'Не найдено';
+        if (data.reason === 'no_activity' && data.debug) {
+          text += ` [activity: ${data.debug.activityDocs}, dedup: ${data.debug.dedupDocs}, users: ${data.debug.distinctUsersFromActivity}/${data.debug.distinctUsersFromDedup}]`;
+        }
+        status.textContent = text;
+        status.style.color = 'var(--warn)';
+      }
     } else {
       featuredUser = data.user;
       const extra = data.resolvedMode && data.resolvedMode !== bannerMode
@@ -970,6 +977,7 @@ function renderServerEditor() {
   ].map(b => `<button class="toggle-btn${bannerMode === b.m ? ' active' : ''}" onclick="selectMode('${b.m}', this)">${b.label}</button>`).join('');
 
   const periodBtns = [
+    { p: 'hour',  label: 'Час'    },
     { p: 'day',   label: 'День'   },
     { p: 'week',  label: 'Неделя' },
     { p: 'month', label: 'Месяц'  },

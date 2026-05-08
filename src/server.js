@@ -218,7 +218,7 @@ function createApp() {
             const modes = ['active', 'birthday'];
             resolvedMode = modes[Math.floor(Math.random() * modes.length)];
             if (resolvedMode === 'active') {
-                const periods = ['day', 'week', 'month'];
+                const periods = ['hour', 'day', 'week', 'month'];
                 resolvedPeriod = periods[Math.floor(Math.random() * periods.length)];
             }
         }
@@ -247,11 +247,35 @@ function createApp() {
 
             if (resolvedMode === 'active') {
                 const periodDays = { day: 1, week: 7, month: 30 }[resolvedPeriod] ?? 7;
-                const periodLabel = { day: 'день', week: 'неделю', month: 'месяц' }[resolvedPeriod] ?? 'неделю';
+                const periodLabel = { hour: 'час', day: 'день', week: 'неделю', month: 'месяц' }[resolvedPeriod] ?? 'неделю';
+                const syncIntervalMs = {
+                    hour: 30 * 60 * 1000,
+                    day: 60 * 60 * 1000,
+                    week: 24 * 60 * 60 * 1000,
+                    month: 7 * 24 * 60 * 60 * 1000
+                }[resolvedPeriod] ?? 60 * 60 * 1000;
 
-                const topUsers = await ActivityService.getTopUsersByPeriod(periodDays);
+                try {
+                    const status = await ActivitySyncService.getStatus();
+                    const lastSuccessTs = status?.lastSuccessAt ? Date.parse(status.lastSuccessAt) : NaN;
+                    const isStale = Number.isNaN(lastSuccessTs) || (Date.now() - lastSuccessTs >= syncIntervalMs);
+                    if (isStale && state.guild) {
+                        const syncResult = await ActivitySyncService.run(state.guild, `on-demand:${resolvedPeriod}`);
+                        if (!syncResult?.skipped) {
+                            console.log('Activity sync (on-demand):', { period: resolvedPeriod, ...syncResult });
+                        }
+                    }
+                } catch (syncErr) {
+                    console.warn('On-demand activity sync failed:', syncErr?.message || syncErr);
+                }
+
+                const topUsers = resolvedPeriod === 'hour'
+                    ? await ActivityService.getTopUsersByRecentWindow(60 * 60 * 1000)
+                    : await ActivityService.getTopUsersByPeriod(periodDays);
                 if (!topUsers || topUsers.length === 0) {
-                    return res.json({ found: false, reason: 'no_activity' });
+                    const debug = await ActivityService.getPeriodDebugStats(periodDays);
+                    console.warn('featured-user no_activity debug:', { period: resolvedPeriod, ...debug });
+                    return res.json({ found: false, reason: 'no_activity', debug });
                 }
 
                 const topUser = { ...topUsers[0] };
@@ -293,6 +317,19 @@ function createApp() {
         } catch (err) {
             console.error('GET /api/activity-sync-status error:', err);
             res.status(500).json({ error: 'Failed to fetch activity sync status' });
+        }
+    });
+
+    // GET /api/activity-debug — container counters for activity troubleshooting
+    app.get('/api/activity-debug', async (req, res) => {
+        try {
+            const period = String(req.query.period || 'week');
+            const days = { day: 1, week: 7, month: 30 }[period] ?? 7;
+            const debug = await ActivityService.getPeriodDebugStats(days);
+            res.json({ period, ...debug });
+        } catch (err) {
+            console.error('GET /api/activity-debug error:', err);
+            res.status(500).json({ error: 'Failed to fetch activity debug stats' });
         }
     });
 

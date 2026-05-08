@@ -157,65 +157,87 @@ class ActivityService {
 
         try {
             const query = `
-                SELECT c.userId, c.displayName, c.avatarURL, 
-                       SUM(c.messageCount) as totalMessages
-                FROM c
-                WHERE c.date >= @cutoffDate
-                GROUP BY c.userId, c.displayName, c.avatarURL
-                ORDER BY totalMessages DESC
-            `;
-
-            const { resources } = await this.container.items
-                .query(query, { parameters: [{ name: '@cutoffDate', value: cutoffString }] })
-                .fetchAll();
-
-            if (resources && resources.length > 0) {
-                return resources;
-            }
-
-            return this._getTopUsersFromDedup(cutoffString);
-        } catch (error) {
-            console.warn('ActivityService.getTopUsersByPeriod aggregate query failed, fallback to JS aggregation:', error?.message || error);
-
-            const fallbackQuery = `
                 SELECT c.userId, c.displayName, c.avatarURL, c.messageCount, c.lastMessageTime
                 FROM c
                 WHERE c.date >= @cutoffDate
             `;
 
             const { resources } = await this.container.items
-                .query(fallbackQuery, { parameters: [{ name: '@cutoffDate', value: cutoffString }] })
+                .query(query, { parameters: [{ name: '@cutoffDate', value: cutoffString }] })
                 .fetchAll();
 
-            const byUser = new Map();
-            for (const row of resources) {
-                const prev = byUser.get(row.userId);
-                if (!prev) {
-                    byUser.set(row.userId, {
-                        userId: row.userId,
-                        displayName: row.displayName,
-                        avatarURL: row.avatarURL,
-                        totalMessages: row.messageCount || 0,
-                        lastMessageTime: row.lastMessageTime || 0
-                    });
-                    continue;
-                }
-
-                prev.totalMessages += row.messageCount || 0;
-                if ((row.lastMessageTime || 0) >= (prev.lastMessageTime || 0)) {
-                    prev.lastMessageTime = row.lastMessageTime || prev.lastMessageTime;
-                    prev.displayName = row.displayName || prev.displayName;
-                    prev.avatarURL = row.avatarURL || prev.avatarURL;
-                }
-            }
-
-            const aggregated = Array.from(byUser.values()).sort((a, b) => b.totalMessages - a.totalMessages);
-            if (aggregated.length > 0) {
-                return aggregated;
-            }
+            const aggregated = this._aggregateTopUsers(resources);
+            if (aggregated.length > 0) return aggregated;
 
             return this._getTopUsersFromDedup(cutoffString);
+        } catch (error) {
+            console.error('ActivityService.getTopUsersByPeriod error:', error?.message || error);
+            throw error;
         }
+    }
+
+    /**
+     * Get top users for an exact recent time window using per-message dedup docs.
+     * @param {number} windowMs
+     * @returns {Promise<Array<{userId:string, displayName:null, avatarURL:null, totalMessages:number}>>}
+     */
+    async getTopUsersByRecentWindow(windowMs) {
+        await this.initialize();
+
+        const cutoffTs = Date.now() - windowMs;
+        const query = `
+            SELECT c.userId
+            FROM c
+            WHERE c.createdAt >= @cutoffTs
+        `;
+
+        const { resources } = await this.messagesContainer.items
+            .query(query, { parameters: [{ name: '@cutoffTs', value: cutoffTs }] })
+            .fetchAll();
+
+        if (!resources || resources.length === 0) {
+            return [];
+        }
+
+        const byUser = new Map();
+        for (const row of resources) {
+            byUser.set(row.userId, (byUser.get(row.userId) || 0) + 1);
+        }
+
+        return Array.from(byUser.entries())
+            .map(([userId, totalMessages]) => ({
+                userId,
+                displayName: null,
+                avatarURL: null,
+                totalMessages
+            }))
+            .sort((a, b) => b.totalMessages - a.totalMessages);
+    }
+
+    _aggregateTopUsers(resources) {
+        const byUser = new Map();
+        for (const row of resources || []) {
+            const prev = byUser.get(row.userId);
+            if (!prev) {
+                byUser.set(row.userId, {
+                    userId: row.userId,
+                    displayName: row.displayName,
+                    avatarURL: row.avatarURL,
+                    totalMessages: row.messageCount || 0,
+                    lastMessageTime: row.lastMessageTime || 0
+                });
+                continue;
+            }
+
+            prev.totalMessages += row.messageCount || 0;
+            if ((row.lastMessageTime || 0) >= (prev.lastMessageTime || 0)) {
+                prev.lastMessageTime = row.lastMessageTime || prev.lastMessageTime;
+                prev.displayName = row.displayName || prev.displayName;
+                prev.avatarURL = row.avatarURL || prev.avatarURL;
+            }
+        }
+
+        return Array.from(byUser.values()).sort((a, b) => b.totalMessages - a.totalMessages);
     }
 
     async _getTopUsersFromDedup(cutoffString) {
@@ -246,6 +268,53 @@ class ActivityService {
                 totalMessages
             }))
             .sort((a, b) => b.totalMessages - a.totalMessages);
+    }
+
+    async getPeriodDebugStats(days = 7) {
+        await this.initialize();
+
+        const cutoffDate = new Date();
+        cutoffDate.setDate(cutoffDate.getDate() - days);
+        const cutoffString = cutoffDate.toISOString().split('T')[0];
+
+        const activityQuery = `
+            SELECT c.userId, c.messageCount
+            FROM c
+            WHERE c.date >= @cutoffDate
+        `;
+
+        const dedupQuery = `
+            SELECT c.userId
+            FROM c
+            WHERE c.date >= @cutoffDate
+        `;
+
+        const [{ resources: activityRows }, { resources: dedupRows }] = await Promise.all([
+            this.container.items.query(activityQuery, { parameters: [{ name: '@cutoffDate', value: cutoffString }] }).fetchAll(),
+            this.messagesContainer.items.query(dedupQuery, { parameters: [{ name: '@cutoffDate', value: cutoffString }] }).fetchAll()
+        ]);
+
+        const activityUsers = new Set();
+        let totalActivityMessages = 0;
+        for (const row of activityRows) {
+            if (row.userId) activityUsers.add(row.userId);
+            totalActivityMessages += Number(row.messageCount || 0);
+        }
+
+        const dedupUsers = new Set();
+        for (const row of dedupRows) {
+            if (row.userId) dedupUsers.add(row.userId);
+        }
+
+        return {
+            days,
+            cutoffDate: cutoffString,
+            activityDocs: activityRows.length,
+            dedupDocs: dedupRows.length,
+            distinctUsersFromActivity: activityUsers.size,
+            distinctUsersFromDedup: dedupUsers.size,
+            totalActivityMessages
+        };
     }
 
     /**
