@@ -3,6 +3,7 @@ const config = require('../config');
 
 const ACTIVITY_CONTAINER = 'activity';
 const ACTIVITY_MESSAGES_CONTAINER = 'activity_messages';
+const TTL_35_DAYS = 35 * 24 * 60 * 60; // 3,024,000 seconds
 
 class ActivityService {
     constructor() {
@@ -22,19 +23,43 @@ class ActivityService {
 
         const database = this.client.database(config.cosmosDbName);
 
-        // Create activity container if it doesn't exist
+        // Create activity containers if they don't exist, then ensure TTL is set.
+        // container.replace() is needed because createIfNotExists skips existing containers.
         await database.containers.createIfNotExists({
             id: ACTIVITY_CONTAINER,
-            partitionKey: { paths: ['/userId'] }
+            partitionKey: { paths: ['/userId'] },
+            defaultTtl: TTL_35_DAYS
         });
 
         await database.containers.createIfNotExists({
             id: ACTIVITY_MESSAGES_CONTAINER,
-            partitionKey: { paths: ['/channelId'] }
+            partitionKey: { paths: ['/channelId'] },
+            defaultTtl: TTL_35_DAYS
         });
 
         this.container = database.container(ACTIVITY_CONTAINER);
         this.messagesContainer = database.container(ACTIVITY_MESSAGES_CONTAINER);
+
+        // Patch TTL on existing containers that were created before TTL was introduced.
+        try {
+            const { resource: actDef } = await this.container.read();
+            if (actDef.defaultTtl !== TTL_35_DAYS) {
+                await this.container.replace({ ...actDef, defaultTtl: TTL_35_DAYS });
+                console.log('ActivityService: updated TTL on activity container');
+            }
+        } catch (e) {
+            console.warn('ActivityService: could not patch TTL on activity container:', e.message);
+        }
+
+        try {
+            const { resource: msgDef } = await this.messagesContainer.read();
+            if (msgDef.defaultTtl !== TTL_35_DAYS) {
+                await this.messagesContainer.replace({ ...msgDef, defaultTtl: TTL_35_DAYS });
+                console.log('ActivityService: updated TTL on activity_messages container');
+            }
+        } catch (e) {
+            console.warn('ActivityService: could not patch TTL on activity_messages container:', e.message);
+        }
         this.initialized = true;
     }
 
@@ -94,6 +119,7 @@ class ActivityService {
             base.lastMessageTime = timestamp;
             base.displayName = params.displayName;
             base.avatarURL = params.avatarURL;
+            base.ttl = TTL_35_DAYS;
 
             delete base._rid;
             delete base._self;
@@ -112,7 +138,8 @@ class ActivityService {
                     displayName: params.displayName,
                     avatarURL: params.avatarURL,
                     messageCount: 1,
-                    lastMessageTime: timestamp
+                    lastMessageTime: timestamp,
+                    ttl: TTL_35_DAYS
                 };
 
                 await this.container.items.create(newRecord);
@@ -132,7 +159,8 @@ class ActivityService {
                 messageId,
                 userId,
                 date,
-                createdAt: Date.now()
+                createdAt: Date.now(),
+                ttl: TTL_35_DAYS
             });
             return true;
         } catch (error) {
