@@ -316,9 +316,15 @@
     font-size: 48px;
   }
 
-  .server-body { padding: 0 20px 24px; }
+  .server-body {
+    position: relative;
+    z-index: 2;
+    padding: 0 20px 24px;
+  }
 
   .server-icon-row {
+    position: relative;
+    z-index: 3;
     display: flex;
     align-items: flex-end;
     gap: 14px;
@@ -510,6 +516,8 @@
   .banner-overlay {
     position: absolute;
     bottom: 0; left: 0; right: 0;
+    z-index: 1;
+    pointer-events: none;
     background: linear-gradient(transparent, rgba(0,0,0,0.78));
     padding: 24px 14px 12px;
     display: flex;

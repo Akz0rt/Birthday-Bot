@@ -124,7 +124,14 @@ client.on(Events.MessageCreate, async message => {
             message.author.displayAvatarURL({ size: 128, extension: 'png' })
         );
     } catch (err) {
-        console.error('Failed to record message activity:', err.message);
+        console.error('Failed to record message activity:', {
+            error: err?.message || err,
+            code: err?.code,
+            statusCode: err?.statusCode,
+            guildId: message.guild?.id,
+            channelId: message.channelId,
+            userId: message.author?.id
+        });
     }
 
     const isAIChannel = message.channelId === config.aiChannelId;
