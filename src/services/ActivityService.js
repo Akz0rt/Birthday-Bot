@@ -163,7 +163,7 @@ class ActivityService {
             `;
 
             const { resources } = await this.container.items
-                .query(query, { parameters: [{ name: '@cutoffDate', value: cutoffString }] })
+                .query({ query, parameters: [{ name: '@cutoffDate', value: cutoffString }] })
                 .fetchAll();
 
             const aggregated = this._aggregateTopUsers(resources);
@@ -192,7 +192,7 @@ class ActivityService {
         `;
 
         const { resources } = await this.messagesContainer.items
-            .query(query, { parameters: [{ name: '@cutoffTs', value: cutoffTs }] })
+            .query({ query, parameters: [{ name: '@cutoffTs', value: cutoffTs }] })
             .fetchAll();
 
         if (!resources || resources.length === 0) {
@@ -248,7 +248,7 @@ class ActivityService {
         `;
 
         const { resources } = await this.messagesContainer.items
-            .query(dedupQuery, { parameters: [{ name: '@cutoffDate', value: cutoffString }] })
+            .query({ query: dedupQuery, parameters: [{ name: '@cutoffDate', value: cutoffString }] })
             .fetchAll();
 
         if (!resources || resources.length === 0) {
@@ -290,8 +290,8 @@ class ActivityService {
         `;
 
         const [{ resources: activityRows }, { resources: dedupRows }] = await Promise.all([
-            this.container.items.query(activityQuery, { parameters: [{ name: '@cutoffDate', value: cutoffString }] }).fetchAll(),
-            this.messagesContainer.items.query(dedupQuery, { parameters: [{ name: '@cutoffDate', value: cutoffString }] }).fetchAll()
+            this.container.items.query({ query: activityQuery, parameters: [{ name: '@cutoffDate', value: cutoffString }] }).fetchAll(),
+            this.messagesContainer.items.query({ query: dedupQuery, parameters: [{ name: '@cutoffDate', value: cutoffString }] }).fetchAll()
         ]);
 
         const activityUsers = new Set();
@@ -331,7 +331,7 @@ class ActivityService {
             const query = `SELECT c.id, c.userId FROM c WHERE c.date < @cutoffDate`;
 
             const { resources } = await this.container.items
-                .query(query, { parameters: [{ name: '@cutoffDate', value: cutoffString }] })
+                .query({ query, parameters: [{ name: '@cutoffDate', value: cutoffString }] })
                 .fetchAll();
 
             for (const doc of resources) {
@@ -340,7 +340,7 @@ class ActivityService {
 
             const dedupQuery = `SELECT c.id, c.channelId FROM c WHERE c.date < @cutoffDate`;
             const { resources: dedupResources } = await this.messagesContainer.items
-                .query(dedupQuery, { parameters: [{ name: '@cutoffDate', value: cutoffString }] })
+                .query({ query: dedupQuery, parameters: [{ name: '@cutoffDate', value: cutoffString }] })
                 .fetchAll();
 
             for (const doc of dedupResources) {
