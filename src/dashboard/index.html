@@ -409,6 +409,100 @@
   }
 
   .invite-copy:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ── Server editor ── */
+  .server-editor-wrap {
+    width: 100%;
+    max-width: 1040px;
+    margin: 0 auto;
+  }
+
+  .server-edit-form {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    margin-bottom: 24px;
+  }
+
+  .server-edit-form h3 {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 16px;
+  }
+
+  .edit-field { margin-bottom: 14px; }
+
+  .edit-field > label {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .edit-field-row { display: flex; gap: 8px; }
+
+  .edit-input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 7px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color .15s;
+    min-width: 0;
+  }
+
+  .edit-input:focus { outline: none; border-color: var(--accent); }
+
+  .file-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 7px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    color: var(--text-muted);
+    transition: border-color .15s, color .15s;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  .file-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .file-btn input[type=file] { display: none; }
+
+  .server-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: start;
+  }
+
+  .compare-label {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+  }
+
+  .compare-label-after { color: var(--accent); }
+
+  @media (max-width: 660px) {
+    .server-compare { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -446,11 +540,11 @@
 
 <!-- ═══════ SERVER TAB ═══════ -->
 <div id="tab-server" class="tab-pane">
-  <div style="display:flex;justify-content:center;margin-bottom:12px">
+  <div style="display:flex;justify-content:center;margin-bottom:16px">
     <button class="btn btn-secondary" onclick="loadGuildInfo()">🔄 Обновить</button>
   </div>
-  <div id="server-card-wrap" style="display:flex;justify-content:center;padding-top:8px">
-    <div style="color:var(--text-muted);padding:24px">Загрузка…</div>
+  <div id="server-card-wrap">
+    <div style="color:var(--text-muted);padding:24px;text-align:center">Загрузка…</div>
   </div>
 </div>
 
@@ -629,49 +723,141 @@ function escAttr(str) {
 }
 
 /* ─── Server card ─── */
+let guildData = null;
+
 async function loadGuildInfo() {
   const wrap = document.getElementById('server-card-wrap');
+  wrap.innerHTML = '<div style="color:var(--text-muted);padding:24px;text-align:center">Загрузка…</div>';
   try {
     const res = await fetch('/api/guild-info');
     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
-    const g = await res.json();
-
-    const boostLabels = ['Нет', 'Уровень 1', 'Уровень 2', 'Уровень 3'];
-
-    const banner = g.bannerUrl
-      ? `<img class="server-banner" src="${escAttr(g.bannerUrl)}" alt="banner">`
-      : `<div class="server-banner-placeholder">🎂</div>`;
-
-    const icon = g.iconUrl
-      ? `<img class="server-icon" src="${escAttr(g.iconUrl)}" alt="icon">`
-      : `<div class="server-icon-placeholder">🏠</div>`;
-
-    const invite = g.inviteUrl
-      ? `<div class="invite-block">
-           <a href="${escAttr(g.inviteUrl)}" target="_blank" rel="noopener">${escHtml(g.inviteUrl)}</a>
-           <button class="invite-copy" onclick="copyInvite('${escAttr(g.inviteUrl)}', this)">Копировать</button>
-         </div>`
-      : `<div style="color:var(--text-muted);font-size:13px">Ссылка-приглашение не найдена</div>`;
-
-    wrap.innerHTML = `
-      <div class="server-card">
-        ${banner}
-        <div class="server-body">
-          <div class="server-icon-row">
-            ${icon}
-            <div class="server-name">${escHtml(g.name)}</div>
-          </div>
-          <div class="server-meta">
-            <div class="server-pill">👥 <span class="pill-accent">${g.memberCount}</span> участников</div>
-            <div class="server-pill">✨ <span class="pill-accent">${boostLabels[g.boostLevel] || 'Уровень ' + g.boostLevel}</span></div>
-            <div class="server-pill">🚀 <span class="pill-accent">${g.boostCount}</span> бустов</div>
-          </div>
-          ${invite}
-        </div>
-      </div>`;
+    guildData = await res.json();
+    renderServerEditor();
   } catch (err) {
     wrap.innerHTML = `<div style="color:var(--error);padding:24px">${escHtml(err.message)}</div>`;
   }
+}
+
+function buildServerCard(g) {
+  const boostLabels = ['Нет', 'Уровень 1', 'Уровень 2', 'Уровень 3'];
+  const banner = g.bannerUrl
+    ? `<img class="server-banner" src="${escAttr(g.bannerUrl)}" alt="banner">`
+    : `<div class="server-banner-placeholder">🎂</div>`;
+  const icon = g.iconUrl
+    ? `<img class="server-icon" src="${escAttr(g.iconUrl)}" alt="icon">`
+    : `<div class="server-icon-placeholder">🏠</div>`;
+  const invite = g.inviteUrl
+    ? `<div class="invite-block">
+         <a href="${escAttr(g.inviteUrl)}" target="_blank" rel="noopener">${escHtml(g.inviteUrl)}</a>
+         <button class="invite-copy" onclick="copyInvite('${escAttr(g.inviteUrl)}', this)">Копировать</button>
+       </div>`
+    : `<div style="color:var(--text-muted);font-size:13px">Ссылка-приглашение не найдена</div>`;
+  return `
+    <div class="server-card">
+      ${banner}
+      <div class="server-body">
+        <div class="server-icon-row">
+          ${icon}
+          <div class="server-name">${escHtml(g.name)}</div>
+        </div>
+        <div class="server-meta">
+          <div class="server-pill">👥 <span class="pill-accent">${g.memberCount}</span> участников</div>
+          <div class="server-pill">✨ <span class="pill-accent">${boostLabels[g.boostLevel] || 'Уровень ' + g.boostLevel}</span></div>
+          <div class="server-pill">🚀 <span class="pill-accent">${g.boostCount}</span> бустов</div>
+        </div>
+        ${invite}
+      </div>
+    </div>`;
+}
+
+function getEditedData() {
+  const bannerVal = document.getElementById('edit-banner-url')?.value.trim();
+  const iconVal   = document.getElementById('edit-icon-url')?.value.trim();
+  const inviteVal = document.getElementById('edit-invite-url')?.value.trim();
+  return {
+    ...guildData,
+    bannerUrl: bannerVal !== undefined ? (bannerVal || null) : guildData.bannerUrl,
+    iconUrl:   iconVal   !== undefined ? (iconVal   || null) : guildData.iconUrl,
+    inviteUrl: inviteVal !== undefined ? (inviteVal || null) : guildData.inviteUrl,
+  };
+}
+
+function updatePreview() {
+  const el = document.getElementById('preview-after');
+  if (el) el.innerHTML = buildServerCard(getEditedData());
+}
+
+function resetEditForm() {
+  document.getElementById('edit-banner-url').value = guildData.bannerUrl || '';
+  document.getElementById('edit-icon-url').value   = guildData.iconUrl   || '';
+  document.getElementById('edit-invite-url').value = guildData.inviteUrl || '';
+  updatePreview();
+}
+
+function handleFileInput(input, type) {
+  const file = input.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  if (type === 'banner') document.getElementById('edit-banner-url').value = url;
+  else if (type === 'icon') document.getElementById('edit-icon-url').value = url;
+  updatePreview();
+}
+
+function renderServerEditor() {
+  const wrap = document.getElementById('server-card-wrap');
+  wrap.innerHTML = `
+    <div class="server-editor-wrap">
+      <div class="server-edit-form">
+        <h3>✏️ Редактировать</h3>
+        <div class="edit-field">
+          <label>Баннер</label>
+          <div class="edit-field-row">
+            <input type="text" id="edit-banner-url" class="edit-input"
+              placeholder="URL изображения или GIF"
+              value="${escAttr(guildData.bannerUrl || '')}"
+              oninput="updatePreview()">
+            <label class="file-btn">
+              📁 Файл
+              <input type="file" accept="image/*" onchange="handleFileInput(this,'banner')">
+            </label>
+          </div>
+        </div>
+        <div class="edit-field">
+          <label>Аватарка</label>
+          <div class="edit-field-row">
+            <input type="text" id="edit-icon-url" class="edit-input"
+              placeholder="URL изображения"
+              value="${escAttr(guildData.iconUrl || '')}"
+              oninput="updatePreview()">
+            <label class="file-btn">
+              📁 Файл
+              <input type="file" accept="image/*" onchange="handleFileInput(this,'icon')">
+            </label>
+          </div>
+        </div>
+        <div class="edit-field">
+          <label>Ссылка-приглашение</label>
+          <input type="text" id="edit-invite-url" class="edit-input"
+            placeholder="https://discord.gg/..."
+            value="${escAttr(guildData.inviteUrl || '')}"
+            oninput="updatePreview()">
+        </div>
+        <div style="margin-top:4px">
+          <button class="btn btn-secondary" onclick="resetEditForm()">↩ Сбросить</button>
+        </div>
+      </div>
+
+      <div class="server-compare">
+        <div class="compare-col">
+          <div class="compare-label">Было</div>
+          ${buildServerCard(guildData)}
+        </div>
+        <div class="compare-col">
+          <div class="compare-label compare-label-after">Стало</div>
+          <div id="preview-after">${buildServerCard(guildData)}</div>
+        </div>
+      </div>
+    </div>`;
 }
 
 function copyInvite(url, btn) {
