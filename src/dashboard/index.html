@@ -503,6 +503,60 @@
   @media (max-width: 660px) {
     .server-compare { grid-template-columns: 1fr; }
   }
+
+  /* ── Banner overlay ── */
+  .banner-container { position: relative; }
+
+  .banner-overlay {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: linear-gradient(transparent, rgba(0,0,0,0.78));
+    padding: 24px 14px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    line-height: 1.2;
+  }
+
+  .overlay-avatar {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.4);
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .overlay-avatar-placeholder {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.4);
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; flex-shrink: 0;
+  }
+
+  .overlay-info { flex: 1; min-width: 0; }
+  .overlay-name { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .overlay-stat { font-size: 11px; color: rgba(255,255,255,0.7); margin-top: 2px; }
+
+  /* ── Toggle buttons ── */
+  .toggle-group { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 8px; }
+
+  .toggle-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-muted);
+    padding: 5px 12px;
+    cursor: pointer;
+    font-size: 12px;
+    font-family: inherit;
+    transition: border-color .15s, color .15s, background .15s;
+    white-space: nowrap;
+  }
+
+  .toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .toggle-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 </style>
 </head>
 <body>
@@ -723,7 +777,10 @@ function escAttr(str) {
 }
 
 /* ─── Server card ─── */
-let guildData = null;
+let guildData    = null;
+let bannerMode   = 'active';  // 'active' | 'birthday' | 'random' | 'none'
+let bannerPeriod = 'week';    // 'day' | 'week' | 'month'
+let featuredUser = null;      // { displayName, avatarURL, stat } | null
 
 async function loadGuildInfo() {
   const wrap = document.getElementById('server-card-wrap');
@@ -733,16 +790,25 @@ async function loadGuildInfo() {
     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
     guildData = await res.json();
     renderServerEditor();
+    if (bannerMode !== 'none') refreshFeaturedUser();
   } catch (err) {
     wrap.innerHTML = `<div style="color:var(--error);padding:24px">${escHtml(err.message)}</div>`;
   }
 }
 
-function buildServerCard(g) {
+function buildUserOverlay(user) {
+  const avatar = user.avatarURL
+    ? `<img class="overlay-avatar" src="${escAttr(user.avatarURL)}" alt="">`
+    : `<div class="overlay-avatar-placeholder">👤</div>`;
+  return `<div class="banner-overlay">${avatar}<div class="overlay-info"><div class="overlay-name">${escHtml(user.displayName)}</div><div class="overlay-stat">${escHtml(user.stat)}</div></div></div>`;
+}
+
+function buildServerCard(g, overlayUser = null) {
   const boostLabels = ['Нет', 'Уровень 1', 'Уровень 2', 'Уровень 3'];
+  const overlay = overlayUser ? buildUserOverlay(overlayUser) : '';
   const banner = g.bannerUrl
-    ? `<img class="server-banner" src="${escAttr(g.bannerUrl)}" alt="banner">`
-    : `<div class="server-banner-placeholder">🎂</div>`;
+    ? `<div class="banner-container"><img class="server-banner" src="${escAttr(g.bannerUrl)}" alt="banner">${overlay}</div>`
+    : `<div class="banner-container"><div class="server-banner-placeholder">🎂</div>${overlay}</div>`;
   const icon = g.iconUrl
     ? `<img class="server-icon" src="${escAttr(g.iconUrl)}" alt="icon">`
     : `<div class="server-icon-placeholder">🏠</div>`;
@@ -784,7 +850,7 @@ function getEditedData() {
 
 function updatePreview() {
   const el = document.getElementById('preview-after');
-  if (el) el.innerHTML = buildServerCard(getEditedData());
+  if (el) el.innerHTML = buildServerCard(getEditedData(), bannerMode !== 'none' ? featuredUser : null);
 }
 
 function resetEditForm() {
@@ -803,14 +869,76 @@ function handleFileInput(input, type) {
   updatePreview();
 }
 
+function selectMode(mode, btn) {
+  bannerMode = mode;
+  document.querySelectorAll('#mode-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const periodOpts = document.getElementById('period-options');
+  if (periodOpts) periodOpts.style.display = mode === 'active' ? '' : 'none';
+  if (mode === 'none') { featuredUser = null; updatePreview(); }
+}
+
+function selectPeriod(period, btn) {
+  bannerPeriod = period;
+  document.querySelectorAll('#period-toggle .toggle-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+async function refreshFeaturedUser() {
+  if (bannerMode === 'none') return;
+  const btn    = document.getElementById('btn-refresh-user');
+  const status = document.getElementById('featured-user-status');
+  if (btn) btn.disabled = true;
+  if (status) { status.textContent = 'Загрузка…'; status.style.color = 'var(--text-muted)'; }
+  try {
+    const params = new URLSearchParams({ mode: bannerMode, period: bannerPeriod });
+    const res  = await fetch('/api/featured-user?' + params);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || res.statusText);
+    if (!data.found) {
+      const reasons = {
+        no_birthdays:     'Сегодня нет именинников',
+        no_activity:      'Нет данных активности (бот собирает статистику с момента запуска)',
+        member_not_found: 'Пользователь не найден на сервере'
+      };
+      featuredUser = null;
+      if (status) { status.textContent = reasons[data.reason] || 'Не найдено'; status.style.color = 'var(--warn)'; }
+    } else {
+      featuredUser = data.user;
+      const extra = data.resolvedMode && data.resolvedMode !== bannerMode
+        ? ` (авто: ${data.resolvedMode})` : '';
+      if (status) { status.textContent = '✅ ' + data.user.displayName + extra; status.style.color = 'var(--success)'; }
+    }
+    updatePreview();
+  } catch (err) {
+    if (status) { status.textContent = '❌ ' + err.message; status.style.color = 'var(--error)'; }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 function renderServerEditor() {
   const wrap = document.getElementById('server-card-wrap');
+
+  const modeBtns = [
+    { m: 'active',   label: '📊 Самый активный' },
+    { m: 'birthday', label: '🎂 Именинники'      },
+    { m: 'random',   label: '🎲 Случайно'        },
+    { m: 'none',     label: '— Скрыть'           },
+  ].map(b => `<button class="toggle-btn${bannerMode === b.m ? ' active' : ''}" onclick="selectMode('${b.m}', this)">${b.label}</button>`).join('');
+
+  const periodBtns = [
+    { p: 'day',   label: 'День'   },
+    { p: 'week',  label: 'Неделя' },
+    { p: 'month', label: 'Месяц'  },
+  ].map(b => `<button class="toggle-btn${bannerPeriod === b.p ? ' active' : ''}" onclick="selectPeriod('${b.p}', this)">${b.label}</button>`).join('');
+
   wrap.innerHTML = `
     <div class="server-editor-wrap">
       <div class="server-edit-form">
         <h3>✏️ Редактировать</h3>
         <div class="edit-field">
-          <label>Баннер</label>
+          <label>Баннер — фон</label>
           <div class="edit-field-row">
             <input type="text" id="edit-banner-url" class="edit-input"
               placeholder="URL изображения или GIF"
@@ -823,7 +951,19 @@ function renderServerEditor() {
           </div>
         </div>
         <div class="edit-field">
-          <label>Аватарка</label>
+          <label>Баннер — пользователь на обложке</label>
+          <div class="toggle-group" id="mode-toggle">${modeBtns}</div>
+          <div id="period-options" style="margin-top:10px${bannerMode !== 'active' ? ';display:none' : ''}">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px">Период активности</div>
+            <div class="toggle-group" id="period-toggle">${periodBtns}</div>
+          </div>
+          <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-secondary" id="btn-refresh-user" onclick="refreshFeaturedUser()">🔄 Обновить пользователя</button>
+            <span id="featured-user-status" style="font-size:12px"></span>
+          </div>
+        </div>
+        <div class="edit-field">
+          <label>Аватарка сервера</label>
           <div class="edit-field-row">
             <input type="text" id="edit-icon-url" class="edit-input"
               placeholder="URL изображения"
@@ -854,7 +994,7 @@ function renderServerEditor() {
         </div>
         <div class="compare-col">
           <div class="compare-label compare-label-after">Стало</div>
-          <div id="preview-after">${buildServerCard(guildData)}</div>
+          <div id="preview-after">${buildServerCard(guildData, bannerMode !== 'none' ? featuredUser : null)}</div>
         </div>
       </div>
     </div>`;

@@ -5,6 +5,7 @@ const config = require('./config');
 const SettingsService = require('./services/SettingsService');
 const AzureManagementService = require('./services/AzureManagementService');
 const AIService = require('./services/AIService');
+const BirthdayService = require('./services/BirthdayService');
 const state = require('./state');
 
 // Names of settings that can be edited via the panel (secrets are read-only)
@@ -198,6 +199,82 @@ function createApp() {
         } catch (err) {
             console.error('GET /api/guild-info error:', err);
             res.status(500).json({ error: 'Failed to fetch guild info' });
+        }
+    });
+
+    // GET /api/featured-user — returns the highlighted user for the server banner overlay
+    app.get('/api/featured-user', async (req, res) => {
+        if (!state.guild) {
+            return res.status(503).json({ error: 'Bot is not connected to Discord yet. Please wait.' });
+        }
+
+        let { mode = 'active', period = 'week' } = req.query;
+        let resolvedMode = mode;
+        let resolvedPeriod = period;
+
+        if (mode === 'random') {
+            const modes = ['active', 'birthday'];
+            resolvedMode = modes[Math.floor(Math.random() * modes.length)];
+            if (resolvedMode === 'active') {
+                const periods = ['day', 'week', 'month'];
+                resolvedPeriod = periods[Math.floor(Math.random() * periods.length)];
+            }
+        }
+
+        try {
+            if (resolvedMode === 'birthday') {
+                const userIds = await BirthdayService.getTodaysBirthdays();
+                if (!userIds.length) return res.json({ found: false, reason: 'no_birthdays' });
+
+                const userId = userIds[Math.floor(Math.random() * userIds.length)];
+                try {
+                    const member = await state.guild.members.fetch(userId);
+                    return res.json({
+                        found: true,
+                        resolvedMode,
+                        user: {
+                            displayName: member.displayName,
+                            avatarURL: member.user.displayAvatarURL({ size: 128, extension: 'png' }),
+                            stat: '🎂 Сегодня именинник!'
+                        }
+                    });
+                } catch {
+                    return res.json({ found: false, reason: 'member_not_found' });
+                }
+            }
+
+            if (resolvedMode === 'active') {
+                const periodMs = { day: 86400000, week: 604800000, month: 2592000000 }[resolvedPeriod] ?? 604800000;
+                const periodLabel = { day: 'день', week: 'неделю', month: 'месяц' }[resolvedPeriod] ?? 'неделю';
+                const cutoff = Date.now() - periodMs;
+
+                let topUser = null;
+                let topCount = 0;
+                for (const [, entry] of state.messageActivity) {
+                    const count = entry.timestamps.filter(t => t > cutoff).length;
+                    if (count > topCount) { topCount = count; topUser = entry; }
+                }
+
+                if (!topUser || topCount === 0) {
+                    return res.json({ found: false, reason: 'no_activity' });
+                }
+
+                return res.json({
+                    found: true,
+                    resolvedMode,
+                    resolvedPeriod,
+                    user: {
+                        displayName: topUser.displayName,
+                        avatarURL: topUser.avatarURL,
+                        stat: `💬 ${topCount} сообщений за ${periodLabel}`
+                    }
+                });
+            }
+
+            return res.status(400).json({ error: 'Unknown mode' });
+        } catch (err) {
+            console.error('GET /api/featured-user error:', err);
+            res.status(500).json({ error: 'Failed to fetch featured user' });
         }
     });
 

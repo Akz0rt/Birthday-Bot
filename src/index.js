@@ -105,6 +105,21 @@ client.on(Events.MessageCreate, async message => {
     if (message.author.bot) return;
     if (!message.guild) return;
 
+    // Track per-user message activity for featured-user banner stats
+    {
+        const entry = state.messageActivity.get(message.author.id)
+            || { displayName: '', avatarURL: null, timestamps: [] };
+        entry.displayName = message.member?.displayName || message.author.username;
+        entry.avatarURL = message.author.displayAvatarURL({ size: 128, extension: 'png' });
+        // Trim to last 30 days to avoid unbounded memory growth
+        if (entry.timestamps.length > 5000) {
+            const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+            entry.timestamps = entry.timestamps.filter(t => t > cutoff);
+        }
+        entry.timestamps.push(Date.now());
+        state.messageActivity.set(message.author.id, entry);
+    }
+
     const isAIChannel = message.channelId === config.aiChannelId;
     const isMentioned = message.mentions.has(client.user);
     if (!isAIChannel && !isMentioned) return;
