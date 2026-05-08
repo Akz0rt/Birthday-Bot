@@ -270,7 +270,8 @@ function createApp() {
             return res.status(400).json({ error: 'Unknown mode' });
         } catch (err) {
             console.error('GET /api/featured-user error:', err);
-            res.status(500).json({ error: 'Failed to fetch featured user' });
+            const details = err?.message || String(err);
+            res.status(500).json({ error: `Failed to fetch featured user: ${details}` });
         }
     });
 

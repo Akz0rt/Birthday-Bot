@@ -171,8 +171,41 @@ class ActivityService {
 
             return resources;
         } catch (error) {
-            console.error('ActivityService.getTopUsersByPeriod error:', error);
-            throw error;
+            console.warn('ActivityService.getTopUsersByPeriod aggregate query failed, fallback to JS aggregation:', error?.message || error);
+
+            const fallbackQuery = `
+                SELECT c.userId, c.displayName, c.avatarURL, c.messageCount, c.lastMessageTime
+                FROM c
+                WHERE c.date >= @cutoffDate
+            `;
+
+            const { resources } = await this.container.items
+                .query(fallbackQuery, { parameters: [{ name: '@cutoffDate', value: cutoffString }] })
+                .fetchAll();
+
+            const byUser = new Map();
+            for (const row of resources) {
+                const prev = byUser.get(row.userId);
+                if (!prev) {
+                    byUser.set(row.userId, {
+                        userId: row.userId,
+                        displayName: row.displayName,
+                        avatarURL: row.avatarURL,
+                        totalMessages: row.messageCount || 0,
+                        lastMessageTime: row.lastMessageTime || 0
+                    });
+                    continue;
+                }
+
+                prev.totalMessages += row.messageCount || 0;
+                if ((row.lastMessageTime || 0) >= (prev.lastMessageTime || 0)) {
+                    prev.lastMessageTime = row.lastMessageTime || prev.lastMessageTime;
+                    prev.displayName = row.displayName || prev.displayName;
+                    prev.avatarURL = row.avatarURL || prev.avatarURL;
+                }
+            }
+
+            return Array.from(byUser.values()).sort((a, b) => b.totalMessages - a.totalMessages);
         }
     }
 
