@@ -1,5 +1,11 @@
 
 
+const { CosmosClient } = require('@azure/cosmos');
+const config = require('../config');
+
+const VOICE_ACTIVITY_CONTAINER = 'voice_activity_sessions';
+const TTL_35_DAYS = 35 * 24 * 60 * 60; // 3,024,000 seconds
+
 class VoiceActivityService {
     constructor() {
         this.client = null;
@@ -67,9 +73,26 @@ class VoiceActivityService {
         const durationSeconds = Math.round((endedAt - startedAt) / 1000);
         if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return false;
         const date = new Date(endedAt).toISOString().split('T')[0];
-        // Read existing doc
-        const { resource: doc } = await this.container.item(docId, guildId).read();
-        if (!doc) return false;
+
+        let doc = null;
+        try {
+            const readResult = await this.container.item(docId, guildId).read();
+            doc = readResult.resource || null;
+        } catch (error) {
+            if (error?.code !== 404) throw error;
+        }
+
+        if (!doc) {
+            doc = {
+                id: docId,
+                guildId,
+                userId,
+                startedAt,
+                createdAt: Date.now(),
+                ttl: TTL_35_DAYS
+            };
+        }
+
         doc.endedAt = endedAt;
         doc.durationSeconds = durationSeconds;
         doc.date = date;
