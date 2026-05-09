@@ -1,8 +1,4 @@
-const { CosmosClient } = require('@azure/cosmos');
-const config = require('../config');
 
-const VOICE_ACTIVITY_CONTAINER = 'voice_activity_sessions';
-const TTL_35_DAYS = 35 * 24 * 60 * 60; // 3,024,000 seconds
 
 class VoiceActivityService {
     constructor() {
@@ -42,36 +38,47 @@ class VoiceActivityService {
         this.initialized = true;
     }
 
-    async recordSession(params) {
+    /**
+     * Upsert a session document on join (startedAt, no endedAt)
+     */
+    async upsertSession({ guildId, userId, displayName, avatarURL, startedAt, channelId }) {
         await this.initialize();
-
-        const { guildId, userId, displayName, avatarURL, startedAt, endedAt } = params;
-        const durationSeconds = Math.round((endedAt - startedAt) / 1000);
-
-        if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
-            return false;
-        }
-
-        const date = new Date(endedAt).toISOString().split('T')[0];
-        const randomSuffix = Math.random().toString(36).slice(2, 8);
-        const docId = `${guildId}-${userId}-${endedAt}-${randomSuffix}`;
-
-        await this.container.items.create({
+        const docId = `${guildId}-${userId}-${startedAt}`;
+        await this.container.items.upsert({
             id: docId,
             guildId,
             userId,
             displayName,
             avatarURL,
             startedAt,
-            endedAt,
-            durationSeconds,
-            date,
+            channelId,
             createdAt: Date.now(),
             ttl: TTL_35_DAYS
         });
+        return docId;
+    }
 
+    /**
+     * Update session document on leave/switch (set endedAt, durationSeconds, date)
+     */
+    async updateSession({ guildId, userId, startedAt, endedAt, displayName, avatarURL }) {
+        await this.initialize();
+        const docId = `${guildId}-${userId}-${startedAt}`;
+        const durationSeconds = Math.round((endedAt - startedAt) / 1000);
+        if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return false;
+        const date = new Date(endedAt).toISOString().split('T')[0];
+        // Read existing doc
+        const { resource: doc } = await this.container.item(docId, guildId).read();
+        if (!doc) return false;
+        doc.endedAt = endedAt;
+        doc.durationSeconds = durationSeconds;
+        doc.date = date;
+        doc.displayName = displayName;
+        doc.avatarURL = avatarURL;
+        await this.container.items.upsert(doc);
         return true;
     }
+
 
     async getTopUsersByRecentWindow(windowMs) {
         await this.initialize();
