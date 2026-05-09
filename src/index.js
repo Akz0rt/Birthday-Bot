@@ -28,9 +28,8 @@ const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildVoiceStates
-        // GuildPresences removed for compatibility with bots lacking privileged intent
+        // MessageContent and GuildPresences removed for compatibility with bots lacking privileged intents
     ]
 });
 
