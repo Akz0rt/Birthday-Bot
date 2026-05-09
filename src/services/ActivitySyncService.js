@@ -1,6 +1,7 @@
 const { ChannelType, PermissionsBitField } = require('discord.js');
 const ActivityService = require('./ActivityService');
 const SyncMetadataService = require('./SyncMetadataService');
+const VoiceActivityService = require('./VoiceActivityService');
 const config = require('../config');
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -8,6 +9,11 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 class ActivitySyncService {
     constructor() {
         this.isRunning = false;
+        this.activeVoiceSessions = null;
+    }
+
+    setActiveVoiceSessions(sessions) {
+        this.activeVoiceSessions = sessions;
     }
 
     async run(guild, reason = 'scheduled') {
@@ -44,6 +50,21 @@ class ActivitySyncService {
                 } catch (error) {
                     errorsCount += 1;
                     await this._setChannelError(channel, guild.id, error);
+                }
+            }
+
+            // Update interim voice activity measurements
+            if (this.activeVoiceSessions) {
+                try {
+                    const voiceUpdate = await VoiceActivityService.updateAllActiveSessions(
+                        this.activeVoiceSessions,
+                        guild.id
+                    );
+                    if (voiceUpdate.updated > 0) {
+                        console.log(`Voice activity: updated ${voiceUpdate.updated} interim sessions`);
+                    }
+                } catch (voiceErr) {
+                    console.error('Activity sync: error updating interim voice sessions:', voiceErr?.message || voiceErr);
                 }
             }
 

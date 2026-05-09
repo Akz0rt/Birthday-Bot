@@ -227,6 +227,57 @@ class VoiceActivityService {
 
         return cutoff.toISOString().split('T')[0];
     }
+
+    /**
+     * Update all active voice sessions with interim measurements (current time as endedAt)
+     * Called during activity sync to capture intermediate durations
+     */
+    async updateAllActiveSessions(activeSessions, guildId) {
+        if (!activeSessions || activeSessions.size === 0) return { updated: 0, errors: 0 };
+
+        await this.initialize();
+        const now = Date.now();
+        const date = new Date(now).toISOString().split('T')[0];
+        let updated = 0;
+        let errors = 0;
+
+        for (const [key, session] of activeSessions) {
+            try {
+                const [keyGuildId, userId] = key.split(':');
+                if (keyGuildId !== guildId) continue;
+
+                const { startedAt } = session;
+                if (!startedAt) continue;
+
+                const durationSeconds = Math.round((now - startedAt) / 1000);
+                if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) continue;
+
+                const docId = `${guildId}-${userId}-${startedAt}`;
+
+                try {
+                    const readResult = await this.container.item(docId, guildId).read();
+                    const doc = readResult.resource || null;
+                    if (doc && !doc.endedAt) {
+                        doc.endedAt = now;
+                        doc.durationSeconds = durationSeconds;
+                        doc.date = date;
+                        doc.lastMeasuredAt = now;
+                        await this.container.items.upsert(doc);
+                        updated += 1;
+                    }
+                } catch (readError) {
+                    if (readError?.code !== 404) {
+                        throw readError;
+                    }
+                }
+            } catch (error) {
+                console.error(`VoiceActivityService: error updating interim session for ${key}:`, error?.message || error);
+                errors += 1;
+            }
+        }
+
+        return { updated, errors };
+    }
 }
 
 module.exports = new VoiceActivityService();

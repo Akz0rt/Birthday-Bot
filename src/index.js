@@ -90,6 +90,7 @@ client.once(Events.ClientReady, async () => {
     // Run activity sync immediately after startup
     if (state.guild) {
         try {
+            ActivitySyncService.setActiveVoiceSessions(activeVoiceSessions);
             const startupSync = await ActivitySyncService.run(state.guild, 'startup');
             console.log('Activity sync (startup):', startupSync);
         } catch (err) {
@@ -102,6 +103,7 @@ client.once(Events.ClientReady, async () => {
     cron.schedule(`*/${interval} * * * *`, async () => {
         if (!state.guild) return;
         try {
+            ActivitySyncService.setActiveVoiceSessions(activeVoiceSessions);
             const periodicSync = await ActivitySyncService.run(state.guild, 'scheduled');
             if (!periodicSync.skipped) {
                 console.log('Activity sync (scheduled):', periodicSync);
