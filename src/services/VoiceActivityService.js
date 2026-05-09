@@ -58,6 +58,7 @@ class VoiceActivityService {
             avatarURL,
             startedAt,
             channelId,
+            isActive: true,
             createdAt: Date.now(),
             ttl: TTL_35_DAYS
         });
@@ -88,6 +89,7 @@ class VoiceActivityService {
                 guildId,
                 userId,
                 startedAt,
+                isActive: true,
                 createdAt: Date.now(),
                 ttl: TTL_35_DAYS
             };
@@ -96,6 +98,8 @@ class VoiceActivityService {
         doc.endedAt = endedAt;
         doc.durationSeconds = durationSeconds;
         doc.date = date;
+        doc.isActive = false;
+        doc.lastMeasuredAt = endedAt;
         doc.displayName = displayName;
         doc.avatarURL = avatarURL;
         await this.container.items.upsert(doc);
@@ -256,17 +260,47 @@ class VoiceActivityService {
 
                 try {
                     const readResult = await this.container.item(docId, guildId).read();
-                    const doc = readResult.resource || null;
-                    if (doc && !doc.endedAt) {
+                    let doc = readResult.resource || null;
+
+                    if (!doc) {
+                        doc = {
+                            id: docId,
+                            guildId,
+                            userId,
+                            startedAt,
+                            isActive: true,
+                            createdAt: Date.now(),
+                            ttl: TTL_35_DAYS
+                        };
+                    }
+
+                    if (doc.isActive !== false) {
                         doc.endedAt = now;
                         doc.durationSeconds = durationSeconds;
                         doc.date = date;
                         doc.lastMeasuredAt = now;
+                        doc.isActive = true;
                         await this.container.items.upsert(doc);
                         updated += 1;
                     }
                 } catch (readError) {
-                    if (readError?.code !== 404) {
+                    if (readError?.code === 404) {
+                        const doc = {
+                            id: docId,
+                            guildId,
+                            userId,
+                            startedAt,
+                            endedAt: now,
+                            durationSeconds,
+                            date,
+                            lastMeasuredAt: now,
+                            isActive: true,
+                            createdAt: Date.now(),
+                            ttl: TTL_35_DAYS
+                        };
+                        await this.container.items.upsert(doc);
+                        updated += 1;
+                    } else {
                         throw readError;
                     }
                 }
