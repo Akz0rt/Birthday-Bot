@@ -7,13 +7,17 @@ const AzureManagementService = require('./services/AzureManagementService');
 const AIService = require('./services/AIService');
 const ActivityService = require('./services/ActivityService');
 const ActivitySyncService = require('./services/ActivitySyncService');
+const VoiceActivityService = require('./services/VoiceActivityService');
 const BirthdayService = require('./services/BirthdayService');
 const state = require('./state');
 
 const BANNER_MODE_KEY = 'BANNER_MODE';
 const ACTIVITY_PERIOD_KEY = 'ACTIVITY_PERIOD';
+const ACTIVITY_CALC_MODE_KEY = 'ACTIVITY_CALC_MODE';
+const SHOW_GAME_ACTIVITY_KEY = 'SHOW_GAME_ACTIVITY';
 const VALID_BANNER_MODES = new Set(['active', 'birthday', 'random', 'none']);
 const VALID_ACTIVITY_PERIODS = new Set(['hour', 'day', 'week', 'month']);
+const VALID_ACTIVITY_CALC_MODES = new Set(['text', 'voice', 'combined']);
 
 // Names of settings that can be edited via the panel (secrets are read-only)
 const EDITABLE_SETTINGS = [
@@ -215,7 +219,9 @@ function createApp() {
             const settings = await SettingsService.getSettings();
             const mode = VALID_BANNER_MODES.has(settings[BANNER_MODE_KEY]) ? settings[BANNER_MODE_KEY] : 'active';
             const period = VALID_ACTIVITY_PERIODS.has(settings[ACTIVITY_PERIOD_KEY]) ? settings[ACTIVITY_PERIOD_KEY] : 'week';
-            res.json({ mode, period });
+            const calcMode = VALID_ACTIVITY_CALC_MODES.has(settings[ACTIVITY_CALC_MODE_KEY]) ? settings[ACTIVITY_CALC_MODE_KEY] : 'text';
+            const showGameActivity = String(settings[SHOW_GAME_ACTIVITY_KEY] || '').toLowerCase() === 'true';
+            res.json({ mode, period, calcMode, showGameActivity });
         } catch (err) {
             console.error('GET /api/server-banner-settings error:', err);
             res.status(500).json({ error: 'Failed to load server banner settings' });
@@ -244,6 +250,18 @@ function createApp() {
                 patch[ACTIVITY_PERIOD_KEY] = period;
             }
 
+            if (Object.prototype.hasOwnProperty.call(body, 'calcMode')) {
+                const calcMode = String(body.calcMode || '').trim();
+                if (!VALID_ACTIVITY_CALC_MODES.has(calcMode)) {
+                    return res.status(400).json({ error: 'Invalid calcMode' });
+                }
+                patch[ACTIVITY_CALC_MODE_KEY] = calcMode;
+            }
+
+            if (Object.prototype.hasOwnProperty.call(body, 'showGameActivity')) {
+                patch[SHOW_GAME_ACTIVITY_KEY] = Boolean(body.showGameActivity) ? 'true' : 'false';
+            }
+
             if (Object.keys(patch).length === 0) {
                 return res.status(400).json({ error: 'No valid banner settings provided' });
             }
@@ -253,7 +271,9 @@ function createApp() {
             const settings = await SettingsService.getSettings();
             const mode = VALID_BANNER_MODES.has(settings[BANNER_MODE_KEY]) ? settings[BANNER_MODE_KEY] : 'active';
             const period = VALID_ACTIVITY_PERIODS.has(settings[ACTIVITY_PERIOD_KEY]) ? settings[ACTIVITY_PERIOD_KEY] : 'week';
-            res.json({ ok: true, mode, period });
+            const calcMode = VALID_ACTIVITY_CALC_MODES.has(settings[ACTIVITY_CALC_MODE_KEY]) ? settings[ACTIVITY_CALC_MODE_KEY] : 'text';
+            const showGameActivity = String(settings[SHOW_GAME_ACTIVITY_KEY] || '').toLowerCase() === 'true';
+            res.json({ ok: true, mode, period, calcMode, showGameActivity });
         } catch (err) {
             console.error('POST /api/server-banner-settings error:', err);
             res.status(500).json({ error: 'Failed to save server banner settings' });
@@ -266,7 +286,21 @@ function createApp() {
             return res.status(503).json({ error: 'Bot is not connected to Discord yet. Please wait.' });
         }
 
-        let { mode = 'active', period = 'week' } = req.query;
+        let { mode = 'active', period = 'week', calcMode, showGameActivity } = req.query;
+        if (!VALID_ACTIVITY_PERIODS.has(period)) period = 'week';
+
+        if (!VALID_ACTIVITY_CALC_MODES.has(calcMode)) {
+            const settings = await SettingsService.getSettings();
+            calcMode = VALID_ACTIVITY_CALC_MODES.has(settings[ACTIVITY_CALC_MODE_KEY]) ? settings[ACTIVITY_CALC_MODE_KEY] : 'text';
+            if (showGameActivity === undefined) {
+                showGameActivity = String(settings[SHOW_GAME_ACTIVITY_KEY] || '').toLowerCase() === 'true';
+            }
+        }
+
+        if (showGameActivity !== true && showGameActivity !== false) {
+            showGameActivity = String(showGameActivity || '').toLowerCase() === 'true';
+        }
+
         let resolvedMode = mode;
         let resolvedPeriod = period;
 
@@ -324,21 +358,93 @@ function createApp() {
                     console.warn('On-demand activity sync failed:', syncErr?.message || syncErr);
                 }
 
-                const topUsers = resolvedPeriod === 'hour'
+                const textTopUsers = resolvedPeriod === 'hour'
                     ? await ActivityService.getTopUsersByRecentWindow(60 * 60 * 1000)
                     : await ActivityService.getTopUsersByPeriod(resolvedPeriod);
-                if (!topUsers || topUsers.length === 0) {
-                    const debug = await ActivityService.getPeriodDebugStats(resolvedPeriod);
+                const voiceTopUsers = resolvedPeriod === 'hour'
+                    ? await VoiceActivityService.getTopUsersByRecentWindow(60 * 60 * 1000)
+                    : await VoiceActivityService.getTopUsersByPeriod(resolvedPeriod);
+
+                let selectedUser = null;
+                let stat = '';
+
+                if (calcMode === 'text') {
+                    const top = textTopUsers[0];
+                    if (top) {
+                        selectedUser = { ...top };
+                        stat = `💬 ${top.totalMessages} сообщений за ${periodLabel}`;
+                    }
+                } else if (calcMode === 'voice') {
+                    const top = voiceTopUsers[0];
+                    if (top) {
+                        selectedUser = { ...top };
+                        stat = `🔊 ${top.totalMinutes} мин в голосе за ${periodLabel}`;
+                    }
+                } else {
+                    const merged = new Map();
+
+                    for (const row of textTopUsers || []) {
+                        merged.set(row.userId, {
+                            userId: row.userId,
+                            displayName: row.displayName || null,
+                            avatarURL: row.avatarURL || null,
+                            totalMessages: Number(row.totalMessages || 0),
+                            totalMinutes: 0,
+                            score: 0
+                        });
+                    }
+
+                    for (const row of voiceTopUsers || []) {
+                        const prev = merged.get(row.userId) || {
+                            userId: row.userId,
+                            displayName: row.displayName || null,
+                            avatarURL: row.avatarURL || null,
+                            totalMessages: 0,
+                            totalMinutes: 0,
+                            score: 0
+                        };
+                        prev.displayName = prev.displayName || row.displayName || null;
+                        prev.avatarURL = prev.avatarURL || row.avatarURL || null;
+                        prev.totalMinutes += Number(row.totalMinutes || 0);
+                        prev.score += Number(row.totalMinutes || 0);
+                        merged.set(row.userId, prev);
+                    }
+
+                    for (const row of merged.values()) {
+                        row.score += Number(row.totalMessages || 0);
+                    }
+
+                    const ranked = Array.from(merged.values()).sort((a, b) => b.score - a.score);
+                    const top = ranked[0];
+                    if (top) {
+                        selectedUser = { ...top };
+                        stat = `🧮 ${top.totalMessages} сообщ., ${top.totalMinutes} мин за ${periodLabel}`;
+                    }
+                }
+
+                if (!selectedUser) {
+                    const [textDebug, voiceDebug] = await Promise.all([
+                        ActivityService.getPeriodDebugStats(resolvedPeriod),
+                        VoiceActivityService.getPeriodDebugStats(resolvedPeriod)
+                    ]);
+                    const debug = { text: textDebug, voice: voiceDebug, calcMode };
                     console.warn('featured-user no_activity debug:', { period: resolvedPeriod, ...debug });
                     return res.json({ found: false, reason: 'no_activity', debug });
                 }
 
-                const topUser = { ...topUsers[0] };
-                if ((!topUser.displayName || !topUser.avatarURL) && topUser.userId && state.guild) {
+                const topUser = { ...selectedUser };
+                if (topUser.userId && state.guild && (showGameActivity || !topUser.displayName || !topUser.avatarURL)) {
                     try {
                         const member = await state.guild.members.fetch(topUser.userId);
                         topUser.displayName = topUser.displayName || member.displayName;
                         topUser.avatarURL = topUser.avatarURL || member.user.displayAvatarURL({ size: 128, extension: 'png' });
+
+                        if (showGameActivity) {
+                            const game = member.presence?.activities?.find(a => a.type === 0) || member.presence?.activities?.[0];
+                            if (game?.name) {
+                                stat += ` • 🎮 ${game.name}`;
+                            }
+                        }
                     } catch {
                         topUser.displayName = topUser.displayName || `User ${topUser.userId}`;
                     }
@@ -348,10 +454,12 @@ function createApp() {
                     found: true,
                     resolvedMode,
                     resolvedPeriod,
+                    calcMode,
+                    showGameActivity,
                     user: {
                         displayName: topUser.displayName,
                         avatarURL: topUser.avatarURL,
-                        stat: `💬 ${topUser.totalMessages} сообщений за ${periodLabel}`
+                        stat
                     }
                 });
             }

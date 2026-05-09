@@ -786,13 +786,14 @@ function escAttr(str) {
 
 /* ─── Server card ─── */
 let guildData    = null;
-let bannerMode   = loadBannerMode();    // 'active' | 'birthday' | 'random' | 'none'
+let bannerMode   = loadBannerMode();    // always 'active'
 let bannerPeriod = loadBannerPeriod();  // 'hour' | 'day' | 'week' | 'month'
+let activityCalcMode = loadActivityCalcMode(); // 'text' | 'voice' | 'combined'
+let showGameActivity = loadShowGameActivity(); // boolean
 let featuredUser = null;      // { displayName, avatarURL, stat } | null
 
 function loadBannerMode() {
-  const saved = localStorage.getItem('bb_banner_mode');
-  return ['active', 'birthday', 'random', 'none'].includes(saved) ? saved : 'active';
+  return 'active';
 }
 
 function loadBannerPeriod() {
@@ -800,9 +801,20 @@ function loadBannerPeriod() {
   return ['hour', 'day', 'week', 'month'].includes(saved) ? saved : 'week';
 }
 
+function loadActivityCalcMode() {
+  const saved = localStorage.getItem('bb_activity_calc_mode');
+  return ['text', 'voice', 'combined'].includes(saved) ? saved : 'text';
+}
+
+function loadShowGameActivity() {
+  return localStorage.getItem('bb_show_game_activity') === 'true';
+}
+
 function persistBannerState() {
   localStorage.setItem('bb_banner_mode', bannerMode);
   localStorage.setItem('bb_banner_period', bannerPeriod);
+  localStorage.setItem('bb_activity_calc_mode', activityCalcMode);
+  localStorage.setItem('bb_show_game_activity', String(showGameActivity));
 }
 
 async function loadBannerSettingsFromServer() {
@@ -811,11 +823,15 @@ async function loadBannerSettingsFromServer() {
     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
     const data = await res.json();
 
-    if (['active', 'birthday', 'random', 'none'].includes(data.mode)) {
-      bannerMode = data.mode;
-    }
+    bannerMode = 'active';
     if (['hour', 'day', 'week', 'month'].includes(data.period)) {
       bannerPeriod = data.period;
+    }
+    if (['text', 'voice', 'combined'].includes(data.calcMode)) {
+      activityCalcMode = data.calcMode;
+    }
+    if (typeof data.showGameActivity === 'boolean') {
+      showGameActivity = data.showGameActivity;
     }
 
     persistBannerState();
@@ -830,7 +846,12 @@ async function saveBannerSettingsToServer() {
     await fetch('/api/server-banner-settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: bannerMode, period: bannerPeriod })
+      body: JSON.stringify({
+        mode: 'active',
+        period: bannerPeriod,
+        calcMode: activityCalcMode,
+        showGameActivity
+      })
     });
   } catch (err) {
     console.warn('Failed to save banner settings to server:', err.message || err);
@@ -847,7 +868,7 @@ async function loadGuildInfo() {
     guildData = await res.json();
     renderServerEditor();
     loadSyncStatus();
-    if (bannerMode !== 'none') refreshFeaturedUser();
+    refreshFeaturedUser();
   } catch (err) {
     wrap.innerHTML = `<div style="color:var(--error);padding:24px">${escHtml(err.message)}</div>`;
   }
@@ -939,7 +960,7 @@ function getEditedData() {
 
 function updatePreview() {
   const el = document.getElementById('preview-after');
-  if (el) el.innerHTML = buildServerCard(getEditedData(), bannerMode !== 'none' ? featuredUser : null);
+  if (el) el.innerHTML = buildServerCard(getEditedData(), featuredUser);
 }
 
 function resetEditForm() {
@@ -958,19 +979,6 @@ function handleFileInput(input, type) {
   updatePreview();
 }
 
-function selectMode(mode, btn) {
-  bannerMode = mode;
-  persistBannerState();
-  saveBannerSettingsToServer();
-  document.querySelectorAll('.js-mode-toggle .toggle-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.mode === mode);
-  });
-  document.querySelectorAll('.js-period-options').forEach(el => {
-    el.style.display = mode === 'active' ? '' : 'none';
-  });
-  if (mode === 'none') { featuredUser = null; updatePreview(); }
-}
-
 function selectPeriod(period, btn) {
   bannerPeriod = period;
   persistBannerState();
@@ -980,14 +988,33 @@ function selectPeriod(period, btn) {
   });
 }
 
+function selectCalcMode(calcMode, btn) {
+  activityCalcMode = calcMode;
+  persistBannerState();
+  saveBannerSettingsToServer();
+  document.querySelectorAll('.js-calc-toggle .toggle-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.calcMode === calcMode);
+  });
+}
+
+function toggleShowGameActivity(checked) {
+  showGameActivity = !!checked;
+  persistBannerState();
+  saveBannerSettingsToServer();
+}
+
 async function refreshFeaturedUser() {
-  if (bannerMode === 'none') return;
   const btn    = document.getElementById('btn-refresh-user');
   const status = document.getElementById('featured-user-status');
   if (btn) btn.disabled = true;
   if (status) { status.textContent = 'Загрузка…'; status.style.color = 'var(--text-muted)'; }
   try {
-    const params = new URLSearchParams({ mode: bannerMode, period: bannerPeriod });
+    const params = new URLSearchParams({
+      mode: 'active',
+      period: bannerPeriod,
+      calcMode: activityCalcMode,
+      showGameActivity: String(showGameActivity)
+    });
     const res  = await fetch('/api/featured-user?' + params);
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.statusText);
@@ -1001,7 +1028,9 @@ async function refreshFeaturedUser() {
       if (status) {
         let text = reasons[data.reason] || 'Не найдено';
         if (data.reason === 'no_activity' && data.debug) {
-          text += ` [activity: ${data.debug.activityDocs}, dedup: ${data.debug.dedupDocs}, users: ${data.debug.distinctUsersFromActivity}/${data.debug.distinctUsersFromDedup}]`;
+          if (data.debug.text && data.debug.voice) {
+            text += ` [text: ${data.debug.text.activityDocs}/${data.debug.text.dedupDocs}, voice: ${data.debug.voice.docs}]`;
+          }
         }
         status.textContent = text;
         status.style.color = 'var(--warn)';
@@ -1024,19 +1053,18 @@ async function refreshFeaturedUser() {
 function renderServerEditor() {
   const wrap = document.getElementById('server-card-wrap');
 
-  const modeBtns = [
-    { m: 'active',   label: '📊 Самый активный' },
-    { m: 'birthday', label: '🎂 Именинники'      },
-    { m: 'random',   label: '🎲 Случайно'        },
-    { m: 'none',     label: '— Скрыть'           },
-  ].map(b => `<button class="toggle-btn${bannerMode === b.m ? ' active' : ''}" data-mode="${b.m}" onclick="selectMode('${b.m}', this)">${b.label}</button>`).join('');
-
   const periodBtns = [
     { p: 'hour',  label: 'Час'    },
     { p: 'day',   label: 'День'   },
     { p: 'week',  label: 'Неделя' },
     { p: 'month', label: 'Месяц'  },
   ].map(b => `<button class="toggle-btn${bannerPeriod === b.p ? ' active' : ''}" data-period="${b.p}" onclick="selectPeriod('${b.p}', this)">${b.label}</button>`).join('');
+
+  const calcModeBtns = [
+    { m: 'text', label: 'Только текст' },
+    { m: 'voice', label: 'Только голос' },
+    { m: 'combined', label: 'Комбинированный' },
+  ].map(b => `<button class="toggle-btn${activityCalcMode === b.m ? ' active' : ''}" data-calc-mode="${b.m}" onclick="selectCalcMode('${b.m}', this)">${b.label}</button>`).join('');
 
   wrap.innerHTML = `
     <div class="server-editor-wrap">
@@ -1056,12 +1084,19 @@ function renderServerEditor() {
           </div>
         </div>
         <div class="edit-field">
-          <label>Баннер — пользователь на обложке</label>
-          <div class="toggle-group js-mode-toggle" id="mode-toggle">${modeBtns}</div>
-          <div class="js-period-options" id="period-options" style="margin-top:10px${bannerMode !== 'active' ? ';display:none' : ''}">
+          <label>Баннер — пользователь на обложке (Самый активный)</label>
+          <div style="margin-top:10px">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px">Режим расчета активности</div>
+            <div class="toggle-group js-calc-toggle" id="calc-toggle">${calcModeBtns}</div>
+          </div>
+          <div id="period-options" style="margin-top:10px">
             <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px">Период активности</div>
             <div class="toggle-group js-period-toggle" id="period-toggle">${periodBtns}</div>
           </div>
+          <label style="display:flex;align-items:center;gap:8px;margin-top:12px;color:var(--text)">
+            <input type="checkbox" ${showGameActivity ? 'checked' : ''} onchange="toggleShowGameActivity(this.checked)">
+            Показывать игровую активность (если доступна)
+          </label>
           <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
             <button class="btn btn-secondary" id="btn-refresh-user" onclick="refreshFeaturedUser()">🔄 Обновить пользователя</button>
             <span id="featured-user-status" style="font-size:12px"></span>
@@ -1100,7 +1135,7 @@ function renderServerEditor() {
         </div>
         <div class="compare-col">
           <div class="compare-label compare-label-after">Стало</div>
-          <div id="preview-after">${buildServerCard(guildData, bannerMode !== 'none' ? featuredUser : null)}</div>
+          <div id="preview-after">${buildServerCard(guildData, featuredUser)}</div>
         </div>
       </div>
     </div>`;

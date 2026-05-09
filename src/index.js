@@ -12,16 +12,25 @@ const NotificationService = require('./services/NotificationService');
 const AIService = require('./services/AIService');
 const ActivityService = require('./services/ActivityService');
 const ActivitySyncService = require('./services/ActivitySyncService');
+const VoiceActivityService = require('./services/VoiceActivityService');
 const state = require('./state');
 const cron = require('node-cron');
 const { startServer } = require('./server');
+
+const activeVoiceSessions = new Map();
+
+function voiceSessionKey(guildId, userId) {
+    return `${guildId}:${userId}`;
+}
 
 // Create a new client instance
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildVoiceStates,
+        GatewayIntentBits.GuildPresences
     ]
 });
 
@@ -231,4 +240,61 @@ process.on('SIGTERM', async () => {
 
     // Force exit if shutdown hangs
     setTimeout(() => process.exit(1), 5000).unref();
+});
+
+client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+    try {
+        const user = newState.member?.user || oldState.member?.user;
+        if (!user || user.bot) return;
+
+        const guildId = newState.guild?.id || oldState.guild?.id;
+        const userId = user.id;
+        if (!guildId || !userId) return;
+
+        const oldChannelId = oldState.channelId;
+        const newChannelId = newState.channelId;
+        const key = voiceSessionKey(guildId, userId);
+        const now = Date.now();
+
+        if (!oldChannelId && newChannelId) {
+            activeVoiceSessions.set(key, { startedAt: now, channelId: newChannelId });
+            return;
+        }
+
+        if (oldChannelId && !newChannelId) {
+            const session = activeVoiceSessions.get(key);
+            activeVoiceSessions.delete(key);
+            if (!session?.startedAt) return;
+
+            const member = newState.member || oldState.member;
+            await VoiceActivityService.recordSession({
+                guildId,
+                userId,
+                displayName: member?.displayName || user.username,
+                avatarURL: user.displayAvatarURL({ size: 128, extension: 'png' }),
+                startedAt: session.startedAt,
+                endedAt: now
+            });
+            return;
+        }
+
+        if (oldChannelId && newChannelId && oldChannelId !== newChannelId) {
+            const session = activeVoiceSessions.get(key);
+            const member = newState.member || oldState.member;
+            if (session?.startedAt) {
+                await VoiceActivityService.recordSession({
+                    guildId,
+                    userId,
+                    displayName: member?.displayName || user.username,
+                    avatarURL: user.displayAvatarURL({ size: 128, extension: 'png' }),
+                    startedAt: session.startedAt,
+                    endedAt: now
+                });
+            }
+
+            activeVoiceSessions.set(key, { startedAt: now, channelId: newChannelId });
+        }
+    } catch (error) {
+        console.error('VoiceStateUpdate handling error:', error?.message || error);
+    }
 });
